@@ -179,3 +179,10 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ---
 
 Anh muốn em viết luôn file `setup_env.bat` (chạy một lần là tạo venv + cài underthesea) hay anh muốn từng bước thủ công cho dễ kiểm soát?
+
+```powershell
+python -m venv venv_AAAA
+.\venv_AAAA\Scripts\Activate
+pip install -r .\requirements.txt
+
+pip install torch --index-url https://download.pytorch.org/whl/cu126
