@@ -1,3 +1,293 @@
+Bạn muốn truy cập các dịch vụ trên **DietPi PC** (như Nextcloud, Emby, hoặc camera) từ bên ngoài (ví dụ, qua mạng 4G trên điện thoại) mà **không cần mở cổng** trên router Wi-Fi nhà mạng để tăng bảo mật. Điều này hoàn toàn có thể thực hiện được với **MikroTik PC** (CPU N4100, SSD 100GB, 4 cổng LAN 2.5G) bằng cách sử dụng **VPN** (như WireGuard) kết hợp với **Dynamic DNS (DDNS)** như `swatcloud.duckdns.org` hoặc `venhadicon.ddns.net`. Dưới đây, mình sẽ giải thích cách cấu hình MikroTik để đạt được mục tiêu này, đồng thời đảm bảo camera trong VLAN 10 vẫn bị cô lập khỏi Internet (như yêu cầu trước) và PC/điện thoại trong mạng Wi-Fi (`192.168.1.0/24`) có thể truy cập các dịch vụ.
+
+---
+
+### 1. Tại sao không nên mở cổng trên router nhà mạng?
+Mở cổng (như 80, 8096 cho Emby, hoặc 554 cho camera) trên router Wi-Fi nhà mạng có một số rủi ro:
+- **Tấn công từ Internet**: Hacker có thể quét các cổng mở (80, 443, 554, v.v.) và khai thác lỗ hổng trên dịch vụ (như Emby, Nextcloud) hoặc camera.
+- **Lỗ hổng bảo mật**: Nếu dịch vụ/camera có firmware lỗi thời hoặc cấu hình yếu (mật khẩu dễ đoán), hacker có thể truy cập vào mạng nội bộ.
+- **Phụ thuộc vào router nhà mạng**: Router nhà mạng thường có firewall kém linh hoạt, khó kiểm soát truy cập chi tiết.
+
+**Giải pháp với MikroTik**: Sử dụng **WireGuard VPN** để truy cập các dịch vụ từ xa mà không cần mở cổng công khai. WireGuard chỉ yêu cầu một cổng (ví dụ, 51820) trên router nhà mạng để thiết lập VPN, và tất cả lưu lượng được mã hóa, đảm bảo an toàn.
+
+---
+
+### 2. Cách sử dụng MikroTik để truy cập dịch vụ mà không mở cổng
+Bạn có thể cấu hình **WireGuard** trên MikroTik để truy cập các dịch vụ (Emby, Nextcloud, camera) từ bên ngoài qua mạng 4G, kết hợp với DDNS (`swatcloud.duckdns.org`) để xử lý IP động. Dưới đây là hướng dẫn chi tiết:
+
+#### Giả định:
+- **Camera**: Trong VLAN 10 (`192.168.10.3`), cô lập khỏi Internet, cổng 554 (RTSP) và 80 (web).
+- **DietPi PC**: Trong VLAN 20 (`192.168.20.10`), chạy Nextcloud (cổng 80), Emby (cổng 8096), và các dịch vụ khác.
+- **PC/điện thoại**: Trong mạng Wi-Fi (`192.168.1.37`, do router nhà mạng cấp).
+- **MikroTik**: IP `192.168.1.2` trên mạng Wi-Fi (cổng `ether1`).
+- **DDNS**: `swatcloud.duckdns.org` (hoặc `venhadicon.ddns.net`).
+
+#### Bước 1: Cấu hình VLAN và cô lập camera
+Sử dụng cấu hình VLAN từ câu trả lời trước để đặt camera trong VLAN 10 và DietPi PC trong VLAN 20, với firewall chặn camera truy cập Internet:
+<xaiArtifact artifact_id="12091106-2049-49e6-853f-2821bc9e24ff" artifact_version_id="617f7c3a-4636-4639-91b5-11c1069a54c4" title="vlan_camera_isolation_with_log.rsc" contentType="text/plain">
+/interface bridge
+add name=bridge1
+/interface vlan
+add name=vlan10-camera vlan-id=10 interface=bridge1
+add name=vlan20-nas vlan-id=20 interface=bridge1
+/ip address
+add address=192.168.10.1/24 interface=vlan10-camera
+add address=192.168.20.1/24 interface=vlan20-nas
+add address=192.168.1.2/24 interface=ether1
+/interface bridge port
+add bridge=bridge1 interface=ether2 pvid=10
+add bridge=bridge1 interface=ether3 pvid=20
+/interface bridge
+set bridge1 vlan-filtering=yes
+/interface bridge vlan
+add bridge=bridge1 vlan-ids=10 tagged=bridge1 untagged=ether2
+add bridge=bridge1 vlan-ids=20 tagged=bridge1 untagged=ether3
+/ip pool
+add name=pool-camera ranges=192.168.10.2-192.168.10.254
+add name=pool-nas ranges=192.168.20.2-192.168.20.254
+/ip dhcp-server
+add name=dhcp-camera address-pool=pool-camera interface=vlan10-camera
+add name=dhcp-nas address-pool=pool-nas interface=vlan20-nas
+/ip dhcp-server network
+add address=192.168.10.0/24 gateway=192.168.10.1 dns-server=192.168.10.1
+add address=192.168.20.0/24 gateway=192.168.20.1 dns-server=192.168.20.1
+/ip route
+add gateway=192.168.1.1
+/ip firewall filter
+add chain=forward src-address=192.168.10.0/24 action=log log-prefix="Camera-Out" comment="Log Camera outgoing traffic"
+add chain=forward dst-address=192.168.10.0/24 action=log log-prefix="Camera-In" comment="Log Camera incoming traffic"
+add chain=forward src-address=192.168.10.0/24 out-interface=ether1 action=drop comment="Block Camera to Internet"
+add chain=forward dst-address=192.168.10.0/24 in-interface=ether1 action=drop comment="Block Internet to Camera"
+add chain=forward src-address=192.168.1.0/24 dst-address=192.168.10.0/24 dst-port=554,80 protocol=tcp action=accept comment="Wi-Fi to Camera"
+add chain=forward src-address=192.168.10.0/24 dst-address=192.168.1.0/24 action=accept comment="Camera response to Wi-Fi"
+add chain=forward src-address=192.168.10.0/24 dst-address=192.168.20.0/24 action=drop comment="Block Camera to NAS"
+add chain=forward src-address=192.168.20.0/24 dst-address=192.168.10.0/24 action=drop comment="Block NAS to Camera"
+add chain=forward src-address=192.168.1.0/24 dst-address=192.168.20.0/24 dst-port=80,8096 protocol=tcp action=accept comment="Wi-Fi to NAS"
+add chain=forward src-address=192.168.20.0/24 dst-address=192.168.1.0/24 action=accept comment="NAS response to Wi-Fi"
+add chain=forward action=accept
+/ip firewall nat
+add chain=dstnat dst-address=192.168.1.2 dst-port=554 protocol=tcp action=dst-nat to-addresses=192.168.10.3 to-ports=554 comment="PC to Camera RTSP"
+add chain=dstnat dst-address=192.168.1.2 dst-port=80 protocol=tcp action=dst-nat to-addresses=192.168.10.3 to-ports=80 comment="PC to Camera Web"
+add chain=dstnat dst-address=192.168.1.2 dst-port=8080 protocol=tcp action=dst-nat to-addresses=192.168.20.10 to-ports=80 comment="PC to Nextcloud"
+add chain=dstnat dst-address=192.168.1.2 dst-port=8096 protocol=tcp action=dst-nat to-addresses=192.168.20.10 to-ports=8096 comment="PC to Emby"
+add chain=srcnat src-address=192.168.10.0/24 action=masquerade
+add chain=srcnat src-address=192.168.20.0/24 action=masquerade
+add chain=srcnat out-interface=ether1 action=masquerade
+</xaiArtifact>
+
+**Cập nhật**: Thêm cổng 8096 cho Emby trong firewall và NAT để PC (`192.168.1.37`) truy cập Emby qua `http://192.168.1.2:8096`.
+
+#### Bước 2: Cấu hình WireGuard trên MikroTik
+WireGuard cho phép bạn truy cập các dịch vụ (camera, Nextcloud, Emby) từ xa qua mạng 4G mà chỉ cần mở **một cổng duy nhất** (51820) trên router nhà mạng.
+
+1. **Tạo giao diện WireGuard**:
+   ```
+   /interface wireguard
+   add name=wg1 listen-port=51820 private-key="your_private_key"
+   ```
+   - Tạo private key:
+     ```
+     /interface wireguard generate-key
+     ```
+   - Lưu public key của MikroTik (xem bằng `/interface wireguard print`).
+
+2. **Gán IP cho WireGuard**:
+   ```
+   /ip address
+   add address=10.0.0.1/24 interface=wg1
+   ```
+
+3. **Thêm peer cho điện thoại**:
+   - Tạo key pair cho điện thoại bằng ứng dụng WireGuard (trên iOS/Android).
+   - Thêm peer trên MikroTik:
+     ```
+     /interface wireguard peers
+     add interface=wg1 public-key="phone_public_key" allowed-address=10.0.0.2/32
+     ```
+     (Thay `phone_public_key` bằng public key của điện thoại).
+
+4. **Cấu hình firewall**:
+   - Cho phép WireGuard và các dịch vụ:
+     ```
+     /ip firewall filter
+     add chain=input dst-port=51820 protocol=udp action=accept comment="Allow WireGuard"
+     add chain=forward src-address=10.0.0.0/24 dst-address=192.168.10.0/24 dst-port=554,80 protocol=tcp action=accept comment="WireGuard to Camera"
+     add chain=forward src-address=10.0.0.0/24 dst-address=192.168.20.0/24 dst-port=80,8096 protocol=tcp action=accept comment="WireGuard to NAS"
+     add chain=forward src-address=192.168.10.0/24 dst-address=10.0.0.0/24 action=accept comment="Camera response to WireGuard"
+     add chain=forward src-address=192.168.20.0/24 dst-address=10.0.0.0/24 action=accept comment="NAS response to WireGuard"
+     ```
+   - Giữ các quy tắc chặn camera ra Internet:
+     ```
+     add chain=forward src-address=192.168.10.0/24 out-interface=ether1 action=drop comment="Block Camera to Internet"
+     add chain=forward dst-address=192.168.10.0/24 in-interface=ether1 action=drop comment="Block Internet to Camera"
+     ```
+
+5. **Cấu hình NAT**:
+   ```
+   /ip firewall nat
+   add chain=srcnat src-address=10.0.0.0/24 action=masquerade comment="WireGuard to LAN"
+   ```
+
+#### Bước 3: Cấu hình DDNS trên MikroTik
+Cập nhật IP động lên `swatcloud.duckdns.org`:
+```
+/system script
+add name=duckdns source=":global ddnsuser \"your_duckdns_token\"; \
+:global ddnshost \"swatcloud.duckdns.org\"; \
+:global wanif \"ether1\"; \
+:local currentIP [/ip address get [/ip address find interface=\$wanif] address]; \
+:local currentIP [:pick \$currentIP 0 [:find \$currentIP \"/\"]]; \
+/tool fetch url=\"https://www.duckdns.org/update?domains=\$ddnshost&token=\$ddnsuser&ip=\$currentIP\" mode=https"
+/system scheduler
+add interval=5m name=duckdns on-event=duckdns policy=read,write,policy,test
+```
+(Thay `your_duckdns_token` và `swatcloud.duckdns.org` bằng thông tin của bạn).
+
+#### Bước 4: Mở cổng WireGuard trên router nhà mạng
+- Truy cập giao diện quản trị router Wi-Fi nhà mạng (thường là `192.168.1.1`).
+- Mở cổng 51820 (UDP) và chuyển tiếp đến MikroTik (`192.168.1.2:51820`).
+  - Ví dụ: Trong phần **Port Forwarding**, thêm:
+    - Protocol: UDP
+    - External Port: 51820
+    - Internal IP: `192.168.1.2`
+    - Internal Port: 51820
+- **Lưu ý**: Chỉ mở cổng 51820 (WireGuard), không mở cổng 80, 8096, hoặc 554.
+
+#### Bước 5: Cấu hình WireGuard trên điện thoại
+1. Cài ứng dụng **WireGuard** trên điện thoại (iOS/Android).
+2. Tạo cấu hình mới:
+   - **Interface**:
+     - Private Key: Key của điện thoại (tạo trong ứng dụng).
+     - Address: `10.0.0.2/32`
+   - **Peer**:
+     - Public Key: Public key của MikroTik (lấy từ `/interface wireguard print`).
+     - Allowed IPs: `192.168.10.0/24,192.168.20.0/24` (cho phép truy cập VLAN 10 và VLAN 20).
+     - Endpoint: `swatcloud.duckdns.org:51820`
+     - Persistent Keepalive: 25
+3. Kết nối VPN qua 4G.
+
+#### Bước 6: Truy cập dịch vụ từ điện thoại qua 4G
+- **Camera**: Mở ứng dụng RTSP (như VLC) và gõ `rtsp://192.168.10.3:554`.
+- **Nextcloud**: Mở trình duyệt, gõ `http://192.168.20.10`.
+- **Emby**: Mở ứng dụng Emby hoặc trình duyệt, gõ `http://192.168.20.10:8096`.
+- **Lưu ý**: Đảm bảo các dịch vụ (Nextcloud, Emby) được cấu hình để chấp nhận kết nối từ IP `10.0.0.0/24` (WireGuard).
+
+---
+
+### 3. Kết quả
+- **Không mở cổng dịch vụ**: Chỉ mở cổng 51820 (UDP) trên router nhà mạng cho WireGuard, không cần mở cổng 80, 8096, hoặc 554.
+- **Truy cập an toàn**:
+  - Từ điện thoại qua 4G, kết nối VPN để truy cập camera (`192.168.10.3`), Nextcloud (`192.168.20.10:80`), và Emby (`192.168.20.10:8096`).
+  - Lưu lượng được mã hóa qua WireGuard, giảm rủi ro bị tấn công.
+- **Camera cô lập**: Camera trong VLAN 10 vẫn không thể kết nối Internet hoặc NAS (VLAN 20).
+- **PC cục bộ**: PC (`192.168.1.37`) truy cập camera qua `rtsp://192.168.1.2:554`, Nextcloud qua `http://192.168.1.2:8080`, và Emby qua `http://192.168.1.2:8096`.
+
+---
+
+### 4. Lưu ý bảo mật
+- **WireGuard**:
+  - Dùng mật khẩu mạnh cho key pair.
+  - Giới hạn peer chỉ cho phép IP cụ thể (`10.0.0.2/32`).
+- **Camera**:
+  - Đảm bảo mật khẩu mạnh, tắt UPnP, cập nhật firmware.
+  - Kiểm tra kết nối lạ (như câu trả lời trước) bằng firewall log hoặc Packet Sniffer.
+- **DietPi PC**:
+  - Cài SSL (Let’s Encrypt) cho Nextcloud và Emby để mã hóa lưu lượng (dù WireGuard đã mã hóa).
+  - Giới hạn truy cập dịch vụ chỉ từ `192.168.1.0/24` (Wi-Fi) và `10.0.0.0/24` (WireGuard).
+- **Router nhà mạng**:
+  - Chỉ mở cổng 51820 (UDP), đóng tất cả cổng khác (80, 443, 8096, 554).
+- **Sao lưu**:
+  ```
+  /system backup save
+  ```
+
+---
+
+### 5. Đề xuất cụ thể
+<xaiArtifact artifact_id="a5222066-9f96-470c-979c-9c0d2fbee40c" artifact_version_id="8e6d04a8-ffb7-4039-b2a5-b7df5931d2f5" title="wireguard_vlan_config.rsc" contentType="text/plain">
+/interface bridge
+add name=bridge1
+/interface vlan
+add name=vlan10-camera vlan-id=10 interface=bridge1
+add name=vlan20-nas vlan-id=20 interface=bridge1
+/ip address
+add address=192.168.10.1/24 interface=vlan10-camera
+add address=192.168.20.1/24 interface=vlan20-nas
+add address=192.168.1.2/24 interface=ether1
+/interface bridge port
+add bridge=bridge1 interface=ether2 pvid=10
+add bridge=bridge1 interface=ether3 pvid=20
+/interface bridge
+set bridge1 vlan-filtering=yes
+/interface bridge vlan
+add bridge=bridge1 vlan-ids=10 tagged=bridge1 untagged=ether2
+add bridge=bridge1 vlan-ids=20 tagged=bridge1 untagged=ether3
+/ip pool
+add name=pool-camera ranges=192.168.10.2-192.168.10.254
+add name=pool-nas ranges=192.168.20.2-192.168.20.254
+/ip dhcp-server
+add name=dhcp-camera address-pool=pool-camera interface=vlan10-camera
+add name=dhcp-nas address-pool=pool-nas interface=vlan20-nas
+/ip dhcp-server network
+add address=192.168.10.0/24 gateway=192.168.10.1 dns-server=192.168.10.1
+add address=192.168.20.0/24 gateway=192.168.20.1 dns-server=192.168.20.1
+/ip route
+add gateway=192.168.1.1
+/interface wireguard
+add name=wg1 listen-port=51820 private-key="your_private_key"
+/ip address
+add address=10.0.0.1/24 interface=wg1
+/interface wireguard peers
+add interface=wg1 public-key="phone_public_key" allowed-address=10.0.0.2/32
+/ip firewall filter
+add chain=forward src-address=192.168.10.0/24 action=log log-prefix="Camera-Out" comment="Log Camera outgoing traffic"
+add chain=forward dst-address=192.168.10.0/24 action=log log-prefix="Camera-In" comment="Log Camera incoming traffic"
+add chain=forward src-address=192.168.10.0/24 out-interface=ether1 action=drop comment="Block Camera to Internet"
+add chain=forward dst-address=192.168.10.0/24 in-interface=ether1 action=drop comment="Block Internet to Camera"
+add chain=forward src-address=192.168.1.0/24 dst-address=192.168.10.0/24 dst-port=554,80 protocol=tcp action=accept comment="Wi-Fi to Camera"
+add chain=forward src-address=192.168.10.0/24 dst-address=192.168.1.0/24 action=accept comment="Camera response to Wi-Fi"
+add chain=forward src-address=192.168.1.0/24 dst-address=192.168.20.0/24 dst-port=80,8096 protocol=tcp action=accept comment="Wi-Fi to NAS"
+add chain=forward src-address=192.168.20.0/24 dst-address=192.168.1.0/24 action=accept comment="NAS response to Wi-Fi"
+add chain=forward src-address=192.168.10.0/24 dst-address=192.168.20.0/24 action=drop comment="Block Camera to NAS"
+add chain=forward src-address=192.168.20.0/24 dst-address=192.168.10.0/24 action=drop comment="Block NAS to Camera"
+add chain=input dst-port=51820 protocol=udp action=accept comment="Allow WireGuard"
+add chain=forward src-address=10.0.0.0/24 dst-address=192.168.10.0/24 dst-port=554,80 protocol=tcp action=accept comment="WireGuard to Camera"
+add chain=forward src-address=10.0.0.0/24 dst-address=192.168.20.0/24 dst-port=80,8096 protocol=tcp action=accept comment="WireGuard to NAS"
+add chain=forward src-address=192.168.10.0/24 dst-address=10.0.0.0/24 action=accept comment="Camera response to WireGuard"
+add chain=forward src-address=192.168.20.0/24 dst-address=10.0.0.0/24 action=accept comment="NAS response to WireGuard"
+add chain=forward action=accept
+/ip firewall nat
+add chain=dstnat dst-address=192.168.1.2 dst-port=554 protocol=tcp action=dst-nat to-addresses=192.168.10.3 to-ports=554 comment="PC to Camera RTSP"
+add chain=dstnat dst-address=192.168.1.2 dst-port=80 protocol=tcp action=dst-nat to-addresses=192.168.10.3 to-ports=80 comment="PC to Camera Web"
+add chain=dstnat dst-address=192.168.1.2 dst-port=8080 protocol=tcp action=dst-nat to-addresses=192.168.20.10 to-ports=80 comment="PC to Nextcloud"
+add chain=dstnat dst-address=192.168.1.2 dst-port=8096 protocol=tcp action=dst-nat to-addresses=192.168.20.10 to-ports=8096 comment="PC to Emby"
+add chain=srcnat src-address=192.168.10.0/24 action=masquerade
+add chain=srcnat src-address=192.168.20.0/24 action=masquerade
+add chain=srcnat src-address=10.0.0.0/24 action=masquerade
+add chain=srcnat out-interface=ether1 action=masquerade
+/system script
+add name=duckdns source=":global ddnsuser \"your_duckdns_token\"; \
+:global ddnshost \"swatcloud.duckdns.org\"; \
+:global wanif \"ether1\"; \
+:local currentIP [/ip address get [/ip address find interface=\$wanif] address]; \
+:local currentIP [:pick \$currentIP 0 [:find \$currentIP \"/\"]]; \
+/tool fetch url=\"https://www.duckdns.org/update?domains=\$ddnshost&token=\$ddnsuser&ip=\$currentIP\" mode=https"
+/system scheduler
+add interval=5m name=duckdns on-event=duckdns policy=read,write,policy,test
+</xaiArtifact>
+
+- **Cô lập camera**: VLAN 10 (`192.168.10.3`) không kết nối Internet.
+- **Truy cập cục bộ**: PC (`192.168.1.37`) truy cập camera (`rtsp://192.168.1.2:554`), Nextcloud (`http://192.168.1.2:8080`), Emby (`http://192.168.1.2:8096`).
+- **Truy cập từ xa**: Điện thoại qua 4G kết nối WireGuard (`swatcloud.duckdns.org:51820`) để truy cập `192.168.10.3:554` (camera), `192.168.20.10:80` (Nextcloud), `192.168.20.10:8096` (Emby).
+
+---
+
+### 6. Hỏi thêm
+- Bạn muốn mình hướng dẫn chi tiết cách cài WireGuard trên điện thoại?
+- Cần thêm cổng dịch vụ khác trên DietPi PC (ngoài 80, 8096)?
+- Hoặc muốn kiểm tra lưu lượng camera bằng Wireshark?
+Hãy cung cấp thêm thông tin (như số lượng camera, cổng cụ thể của dịch vụ, hoặc model router Wi-Fi) để mình tối ưu hơn!
+---
 Cảm ơn bạn đã đặt câu hỏi chi tiết! Dưới đây, mình sẽ giải đáp từng vấn đề liên quan đến việc sử dụng **WireGuard VPN** trên **MikroTik PC** (CPU N4100, SSD 100GB, 4 cổng LAN 2.5G) để truy cập các dịch vụ (camera, Nextcloud, Emby) từ xa qua mạng 4G, như thể điện thoại của bạn đang ở nhà. Mình cũng sẽ giải thích về nhà cung cấp dịch vụ VPN, mức độ an toàn, tốc độ, và chi phí.
 
 ---
