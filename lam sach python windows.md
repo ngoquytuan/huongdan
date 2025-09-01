@@ -123,6 +123,54 @@ Rồi cài lại:
 ```bash
 pip install underthesea
 ```
+---
+Không cần anh nhé 👍
+
+Mấy điểm quan trọng để anh yên tâm:
+
+---
+
+## 🔹 1. Conda và Python cài độc lập
+
+* **Conda** (Anaconda / Miniconda) có sẵn Python riêng trong từng **conda environment**.
+* **Python cài từ python.org** là bản hệ thống (system-wide), không ảnh hưởng đến Conda.
+
+Tức là:
+
+* Conda vẫn dùng bản Python mà nó quản lý.
+* Python 3.10 anh vừa cài thêm chỉ để tạo venv riêng, nó không “đụng” tới Conda.
+
+---
+
+## 🔹 2. Khi nào cần dùng Conda
+
+* Nếu anh muốn quản lý môi trường bằng `conda create ...`, thì Conda sẽ tự tải Python phiên bản tương thích (ví dụ 3.10).
+* Không cần cài lại Conda, chỉ cần tạo môi trường mới trong Conda:
+
+```bash
+conda create -n vn_nlp python=3.10
+conda activate vn_nlp
+pip install underthesea
+```
+
+---
+
+## 🔹 3. Khi nào nên dùng venv
+
+* Nếu anh muốn nhẹ gọn, dễ kiểm soát dependency thì dùng `python -m venv ...`.
+* Nếu anh hay phải cài lib nặng như `numpy`, `scipy`, `torch`… thì Conda tiện hơn (vì nó có sẵn binary, không phải build lâu).
+
+---
+
+✅ Kết luận:
+
+* Anh **không cần cài lại Conda**.
+* Có thể dùng **venv với Python 3.10** hoặc **Conda environment với Python 3.10** đều được.
+* Dùng Conda sẽ dễ tránh lỗi build thư viện hơn.
+
+---
+
+👉 Anh muốn em hướng dẫn chi tiết cách **cài underthesea bằng Conda (nhanh, ít lỗi)** không, hay anh thích đi theo hướng **venv thuần Python**?
 
 ---
 
