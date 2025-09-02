@@ -762,3 +762,119 @@ add interval=5m name=duckdns on-event=duckdns policy=read,write,policy,test
 - Muốn hướng dẫn cách dùng Wireshark để kiểm tra lưu lượng camera?
 - Hoặc cần tối ưu tốc độ VPN (kiểm tra CPU, băng thông)?
 Hãy cung cấp thêm thông tin (tốc độ Internet, số lượng camera, hoặc model router) để mình tối ưu hơn!
+
+---
+Dưới đây là sơ đồ **Mermaid** minh họa mô hình mạng mà mình đã hướng dẫn bạn thiết lập, bao gồm **MikroTik PC** chạy **WireGuard VPN**, các VLAN (camera trong VLAN 10, DietPi PC trong VLAN 20), và kết nối từ điện thoại/máy tính qua mạng 4G để truy cập các dịch vụ (camera, Nextcloud, Emby) mà không cần mở cổng công khai trên router nhà mạng. Sơ đồ sẽ thể hiện rõ các thành phần, VLAN, và luồng dữ liệu (cục bộ và từ xa qua VPN).
+
+---
+
+### Sơ đồ Mermaid
+
+```mermaid
+graph TD
+    subgraph Internet
+        A[Điện thoại<br>4G, IP: 10.0.0.2<br>WireGuard Client] -->|WireGuard<br>swatcloud.duckdns.org:51820| B[Router Nhà mạng<br>192.168.1.1<br>Port Forward: 51820/UDP]
+        C[Máy tính<br>Internet, IP: 10.0.0.3<br>WireGuard Client] -->|WireGuard<br>swatcloud.duckdns.org:51820| B
+    end
+
+    subgraph Mạng Nhà
+        B -->|ether1<br>192.168.1.2| D[MikroTik PC<br>WireGuard Server<br>10.0.0.1]
+        
+        subgraph VLAN 10 - Camera
+            E[Camera<br>192.168.10.3<br>Port: 554/RTSP, 80/Web] -->|ether2| D
+        end
+        
+        subgraph VLAN 20 - DietPi PC
+            F[DietPi PC<br>192.168.20.10<br>Nextcloud: 80<br>Emby: 8096] -->|ether3| D
+        end
+        
+        subgraph Mạng Wi-Fi
+            G[PC/Điện thoại<br>192.168.1.37] -->|Wi-Fi| B
+        end
+    end
+
+    %% Luồng dữ liệu cục bộ
+    G -->|rtsp://192.168.1.2:554| D --> E
+    G -->|http://192.168.1.2:8080| D --> F
+    G -->|http://192.168.1.2:8096| D --> F
+
+    %% Luồng dữ liệu từ xa qua VPN
+    A -->|rtsp://192.168.10.3:554| D --> E
+    A -->|http://192.168.20.10| D --> F
+    A -->|http://192.168.20.10:8096| D --> F
+    C -->|rtsp://192.168.10.3:554| D --> E
+    C -->|http://192.168.20.10| D --> F
+    C -->|http://192.168.20.10:8096| D --> F
+
+    %% Cô lập
+    E -.-|Firewall: Chặn Internet| B
+    E -.-|Firewall: Chặn VLAN 20| F
+```
+
+---
+
+### Giải thích sơ đồ
+1. **Thành phần chính**:
+   - **Internet**:
+     - **Điện thoại (4G, 10.0.0.2)** và **Máy tính (Internet, 10.0.0.3)**: Kết nối qua WireGuard đến `swatcloud.duckdns.org:51820`.
+     - **Router nhà mạng (192.168.1.1)**: Chuyển tiếp cổng 51820/UDP đến MikroTik.
+   - **Mạng nhà**:
+     - **MikroTik PC (192.168.1.2, 10.0.0.1)**: Chạy WireGuard server, quản lý VLAN, định tuyến lưu lượng.
+     - **VLAN 10 (Camera, 192.168.10.3)**: Cô lập, chỉ cho phép truy cập từ Wi-Fi (192.168.1.0/24) và WireGuard (10.0.0.0/24).
+     - **VLAN 20 (DietPi PC, 192.168.20.10)**: Chạy Nextcloud (cổng 80), Emby (cổng 8096), truy cập từ Wi-Fi và WireGuard.
+     - **Mạng Wi-Fi (PC/Điện thoại, 192.168.1.37)**: Truy cập cục bộ qua NAT.
+
+2. **Luồng dữ liệu cục bộ**:
+   - PC/điện thoại trong Wi-Fi (`192.168.1.37`) truy cập:
+     - Camera: `rtsp://192.168.1.2:554` (NAT đến `192.168.10.3:554`).
+     - Nextcloud: `http://192.168.1.2:8080` (NAT đến `192.168.20.10:80`).
+     - Emby: `http://192.168.1.2:8096` (NAT đến `192.168.20.10:8096`).
+   - MikroTik định tuyến lưu lượng qua NAT và firewall.
+
+3. **Luồng dữ liệu từ xa (VPN)**:
+   - Điện thoại/máy tính qua 4G/Internet kết nối WireGuard (`swatcloud.duckdns.org:51820`) và truy cập trực tiếp:
+     - Camera: `rtsp://192.168.10.3:554`.
+     - Nextcloud: `http://192.168.20.10`.
+     - Emby: `http://192.168.20.10:8096`.
+   - Lưu lượng mã hóa qua WireGuard, chỉ cần mở cổng 51820/UDP trên router nhà mạng.
+
+4. **Cô lập**:
+   - Camera (VLAN 10) bị chặn truy cập Internet và VLAN 20 (DietPi PC) qua firewall:
+     ```
+     /ip firewall filter
+     add chain=forward src-address=192.168.10.0/24 out-interface=ether1 action=drop
+     add chain=forward src-address=192.168.10.0/24 dst-address=192.168.20.0/24 action=drop
+     ```
+
+---
+
+### Cách sử dụng sơ đồ
+- **Xem sơ đồ**: Sao chép mã Mermaid trên và dán vào công cụ hỗ trợ Mermaid như [Mermaid Live Editor](https://mermaid.live/) để hiển thị trực quan.
+- **Hiểu luồng**:
+  - Mũi tên rắn (`-->`) biểu thị kết nối mạng hoặc luồng truy cập được phép.
+  - Mũi tên nét đứt (`-.-`) biểu thị kết nối bị chặn bởi firewall.
+- **Ứng dụng**:
+  - Sơ đồ giúp bạn hình dung cách MikroTik định tuyến lưu lượng giữa Wi-Fi, VLAN, và VPN.
+  - Xác định rõ camera cô lập khỏi Internet và VLAN 20, chỉ cho phép truy cập từ Wi-Fi (192.168.1.0/24) và WireGuard (10.0.0.0/24).
+
+---
+
+### Lưu ý
+- **Cấu hình MikroTik**: Dùng file `wireguard_vlan_config.rsc` từ câu trả lời trước để thiết lập VLAN, WireGuard, firewall, và DDNS.
+- **Kiểm tra**:
+  - Trên MikroTik: `/interface wireguard peers print` để xác nhận kết nối VPN.
+  - Trên điện thoại/máy tính: Kiểm tra lưu lượng gửi/nhận trong ứng dụng WireGuard.
+- **Bảo mật**:
+  - Giữ key pair WireGuard an toàn.
+  - Kiểm tra log để phát hiện kết nối lạ từ camera:
+    ```
+    /log print where topics=firewall
+    ```
+
+---
+
+### Hỏi thêm
+- Bạn cần mình tối ưu sơ đồ (thêm chi tiết, như cổng cụ thể hoặc thiết bị khác)?
+- Muốn hướng dẫn cách tích hợp thêm dịch vụ trên DietPi (ngoài Nextcloud, Emby)?
+- Hoặc cần kiểm tra tốc độ VPN trên MikroTik?
+Hãy cung cấp thêm thông tin (tốc độ Internet, số lượng camera, model router) để mình hỗ trợ chi tiết hơn!
