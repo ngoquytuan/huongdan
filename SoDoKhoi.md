@@ -30,6 +30,24 @@ graph TD
     K -->|Không| G
 ```
 
+```mermaid
+graph TD
+    A(Bắt đầu) --> B[Khởi tạo chương trình<br>Khởi tạo chương trình<br>Khởi tạo chương trình<br>Khởi tạo chương trình<br>Khởi tạo chương trình<br>Khởi tạo thư viện W5500<br>]
+    B --> C[Đọc đầu vào GPIO và cập nhật thông tin trạng thái GPS, nguồn cấp]
+    C --> M[Nhận bản tin UART và cập nhật thông tin thời gian GPS]
+    M --> D{Có yêu cầu bản tin <br> NTP?}
+    D -->|Thành công| E[Gửi yêu cầu NTP tới server]
+    D -->|Thất bại| F[Thử lại kết nối]
+    F -->|Tối đa lần thử| G[Kết thúc chu trình]
+    E --> H[Nhận dữ liệu NTP time]
+    H --> I[Xử lý dữ liệu thời gian]
+    I --> J[Đồng bộ thời gian hệ thống]
+    J --> K{Lặp lại chu trình?}
+    K -->|Có| E
+    K -->|Không| G
+    G --> B
+```
+
 ### Giải thích sơ đồ
 - **Khởi tạo phần mềm**: Bắt đầu bằng việc khởi tạo hệ thống, bao gồm phần cứng (ví dụ: RTC, bộ nhớ) và ngăn xếp mạng (TCP/IP).
 - **Kết nối mạng**: Thiết lập kết nối Wi-Fi hoặc Ethernet. Nếu thất bại, hệ thống thử lại một số lần trước khi dừng.
