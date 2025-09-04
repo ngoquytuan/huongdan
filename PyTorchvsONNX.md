@@ -119,6 +119,102 @@ print(f"Time (ONNX): {end - start:.4f} s")
 ```
 
 ---
+```python
+import time
+import torch
+import onnx
+import onnxruntime as ort
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from transformers import AutoTokenizer
+
+# ======================
+# 1. Chuẩn bị model và tokenizer
+# ======================
+model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+model_torch = SentenceTransformer(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+sentences = [
+    "Xin chào, tôi đang thử benchmark.",
+    "PyTorch và ONNX khác nhau thế nào?",
+    "Chúng ta sẽ đo tốc độ inference."
+]
+
+# ======================
+# 2. PyTorch Inference
+# ======================
+print("🔹 PyTorch Inference")
+start = time.time()
+embeddings_torch = model_torch.encode(sentences)
+end = time.time()
+print("Embeddings shape (PyTorch):", embeddings_torch.shape)
+print("Time (PyTorch): %.4f s" % (end - start))
+
+# ======================
+# 3. Export sang ONNX
+# ======================
+onnx_path = "model.onnx"
+
+try:
+    onnx_model = onnx.load(onnx_path)
+    print(f"⚡ Dùng lại ONNX model đã có: {onnx_path}")
+except:
+    print("⚡ Exporting model sang ONNX...")
+    # Lấy backbone từ SentenceTransformer và đưa về CPU
+    model_onnx = model_torch._first_module().auto_model.cpu()
+
+    # Dummy input cũng phải ở CPU
+    dummy_input = tokenizer("Câu thử nghiệm", return_tensors="pt")
+    dummy_input = {
+        "input_ids": dummy_input["input_ids"].cpu(),
+        "attention_mask": dummy_input["attention_mask"].cpu()
+    }
+
+    # Export
+    torch.onnx.export(
+        model_onnx,
+        (dummy_input["input_ids"], dummy_input["attention_mask"]),
+        onnx_path,
+        input_names=["input_ids", "attention_mask"],
+        output_names=["last_hidden_state"],
+        dynamic_axes={
+            "input_ids": {0: "batch", 1: "sequence"},
+            "attention_mask": {0: "batch", 1: "sequence"},
+            "last_hidden_state": {0: "batch", 1: "sequence"}
+        },
+        opset_version=14
+    )
+    print("✅ Xuất ONNX thành công:", onnx_path)
+
+# ======================
+# 4. ONNX Inference
+# ======================
+print("\n🔹 ONNX Inference")
+ort_session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
+
+# Tokenize cho ONNX (numpy tensors)
+tokens = tokenizer(sentences, padding=True, truncation=True, return_tensors="np")
+
+# ⚡ Fix: ép kiểu sang int64
+inputs_onnx = {
+    "input_ids": tokens["input_ids"].astype(np.int64),
+    "attention_mask": tokens["attention_mask"].astype(np.int64)
+}
+
+start = time.time()
+outputs = ort_session.run(["last_hidden_state"], inputs_onnx)
+end = time.time()
+
+embeddings_onnx = outputs[0][:, 0, :]  # lấy vector [CLS]
+print("Embeddings shape (ONNX):", embeddings_onnx.shape)
+print("Time (ONNX): %.4f s" % (end - start))
+
+
+
+
+```
+---
 
 ## 4️⃣ Cách chạy
 
