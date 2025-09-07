@@ -1,3 +1,44 @@
+PS C:\\Users\\Admin> docker volume create portainer_data
+portainer_data
+PS C:\\Users\\Admin> docker run -d -p 8009:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
+
+Ubuntu
+
+```bash
+sudo docker volume create portainer_data
+```
+
+Unable to find image 'portainer/portainer-ce:lts' locally
+lts: Pulling from portainer/portainer-ce
+4f4fb700ef54: Pull complete
+e09df2601140: Pull complete
+026c6c48a0ca: Pull complete
+39c064200eba: Pull complete
+e4ba18366a7f: Pull complete
+978ce5e921d5: Pull complete
+04de093ad5ed: Pull complete
+63c930229559: Pull complete
+d3b1c06ebf8c: Pull complete
+a9ff7abff372: Pull complete
+Digest: sha256:224a378fbc5ae579dc9d570c5ca2e5e981a4a003c8d7c2c5b5e482af97c2f87c
+Status: Downloaded newer image for portainer/portainer-ce:lts
+eac3c6490db89356e62948e9a1b3b9b42d9d777f87600522a6468bbb93c81617
+
+```bash
+ PS C:\Users\Admin> docker run -d -p 8009:8000 -p 9443:9443 -p 9000:9000 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
+3469e6c7a9b80818c341ed5a6bcfbb2f6520bc49f36c5205e7d3ed6e8af095b2
+PS C:\Users\Admin> docker run -d -p 9443:9443 -p 9006:9000 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
+0494dbb1a001799920ee826cc126bd4eb4635e15030366a3c8ac6098b5debb4e
+PS C:\Users\Admin>
+```
+
+Lệnh này chạy đúng
+
+```bash
+sudo docker run -d -p 9443:9443 -p 9006:9000 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
+```
+
+docker run -d -p 9443:9443 -p 9006:9000 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
 Chuẩn rồi Tuấn 🚀, Docker Desktop trên Windows hay gặp tình trạng chiếm nhiều dung lượng vì:
 
 * Image cũ không dùng nữa.
@@ -269,7 +310,7 @@ Ok, Tuấn 👍 mình sẽ vẽ sơ đồ **Mermaid pipeline** cho dòng triển
 ```mermaid
 flowchart LR
     A[👨‍💻 Developer\nViết code & test] --> B[🐳 Docker\nBuild Docker Image]
-    B --> C[📦 Docker Registry\n(Lưu trữ image)]
+    B --> C[📦 Docker Registry\nLưu trữ image]
     C --> D[☸️ Kubernetes Cluster\nTriển khai Container]
     D --> E[🌍 Người dùng cuối\nTruy cập dịch vụ]
 
