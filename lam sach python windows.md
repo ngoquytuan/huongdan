@@ -127,6 +127,93 @@ pip install underthesea
 Không cần anh nhé 👍
 
 Mấy điểm quan trọng để anh yên tâm:
+---
+Ubuntu
+Tuyệt 👌, giờ bạn đã có Python 3.11 và pip riêng, bước tiếp theo là tạo **môi trường ảo (virtual environment)** để cài thư viện độc lập cho dự án, không ảnh hưởng hệ thống.
+
+---
+
+## 🔹 1. Tạo môi trường ảo với Python 3.11
+
+Giả sử bạn muốn làm dự án tên `myproject`:
+
+```bash
+mkdir ~/myproject
+cd ~/myproject
+python3.11 -m venv venv
+```
+
+Lúc này sẽ có thư mục `venv/` chứa môi trường ảo.
+
+---
+
+## 🔹 2. Kích hoạt môi trường ảo
+
+```bash
+source venv/bin/activate
+```
+
+Sau khi kích hoạt, terminal sẽ có dạng:
+
+```
+(venv) tuannq@tuannq-Latitude-E6230:~/myproject$
+```
+
+📌 Lúc này, `python` và `pip` đều sẽ là **phiên bản trong venv (3.11)**, độc lập với hệ thống.
+
+---
+
+## 🔹 3. Nâng cấp pip trong môi trường
+
+```bash
+pip install --upgrade pip
+```
+
+---
+
+## 🔹 4. Cài các thư viện thường dùng
+
+Tùy bạn làm gì, nhưng mình gợi ý:
+
+### 🧑‍💻 Phát triển chung:
+
+```bash
+pip install requests numpy pandas matplotlib
+```
+
+### 🤖 Machine Learning / AI:
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install scikit-learn jupyter
+```
+
+### 🌐 Web (nếu bạn làm web app):
+
+```bash
+pip install flask fastapi uvicorn
+```
+
+---
+
+## 🔹 5. Kiểm tra lại môi trường
+
+```bash
+python --version
+pip list
+```
+
+---
+
+## 🔹 6. Thoát môi trường ảo khi không dùng
+
+```bash
+deactivate
+```
+
+---
+
+👉 Bạn muốn mình viết tiếp một file `requirements.txt` chuẩn (có đủ mấy gói hay dùng: numpy, pandas, requests, flask, torch, scikit-learn…) để bạn chỉ cần chạy `pip install -r requirements.txt` là xong không?
 
 ---
 
