@@ -456,3 +456,76 @@ Về **chi phí khi triển khai thương mại với Docker + Kubernetes**, chi
 
 Anh muốn tôi phân tích chi tiết luôn xem **trường hợp nào nên tự build (on-prem)** và **trường hợp nào nên thuê cloud (managed Kubernetes)** cho một hệ thống như “Face AI Canh Giác Gia Đình” không?
 ---
+Có 2 cách chính để bạn làm việc này, tuỳ mục đích phát triển (development) hay chạy thật (production):
+
+---
+
+## 🔹 1. Dành cho **development** (muốn sửa code và thấy thay đổi ngay trong container)
+
+Bạn không cần rebuild image mỗi lần sửa code. Thay vào đó:
+
+* Mount code từ host vào container bằng `volumes` trong `docker-compose.yml` hoặc lệnh `docker run -v`.
+
+Ví dụ:
+
+```yaml
+version: "3.9"
+services:
+  app:
+    build: .
+    volumes:
+      - ./src:/app   # mount thư mục code host vào container
+    ports:
+      - "8000:8000"
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+* Ở đây `--reload` (nếu bạn dùng **uvicorn/FastAPI/Flask debug mode**) sẽ tự động load lại code khi có thay đổi.
+
+👉 Ưu điểm: sửa code bên ngoài là thấy kết quả ngay.
+👉 Nhược điểm: không tối ưu cho production.
+
+---
+
+## 🔹 2. Dành cho **production** (chạy ổn định, không hot-reload)
+
+Mỗi khi sửa source code Python bạn cần:
+
+1. Rebuild lại Docker image:
+
+   ```bash
+   docker compose build app
+   ```
+
+   hoặc
+
+   ```bash
+   docker build -t myapp .
+   ```
+
+2. Restart container để chạy code mới:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   hoặc
+
+   ```bash
+   docker run -d -p 8000:8000 myapp
+   ```
+
+👉 Cách này đảm bảo môi trường luôn đồng nhất và tránh lỗi do mount.
+
+---
+
+📌 Tóm lại:
+
+* **Phát triển (dev)** → mount code (`volumes`) + bật hot reload.
+* **Triển khai (prod)** → rebuild image + restart container.
+
+---
+
+Bạn đang muốn môi trường của mình chạy theo hướng **dev (sửa code là thấy ngay)** hay **prod (mỗi lần cập nhật thì build lại image)**?
+
+
