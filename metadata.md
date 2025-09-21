@@ -1,4 +1,50 @@
-Câu hỏi rất hay 👍. Metadata có thể **lưu trữ** theo nhiều cách khác nhau, tùy hệ thống quản lý tài liệu hay dữ liệu mà bạn dùng. Tôi chia ra 3 trường hợp để bạn dễ hình dung:
+"Metadata" có thể hiểu đơn giản là **“dữ liệu về dữ liệu”**.
+Nó không phải là nội dung chính, mà là thông tin bổ sung mô tả, giải thích hoặc giúp quản lý dữ liệu/tài liệu đó.
+
+---
+
+### 1. Định nghĩa
+
+* Metadata là tập hợp thông tin mô tả về dữ liệu, giúp **xác định, phân loại, tìm kiếm, quản lý và sử dụng dữ liệu** dễ dàng hơn.
+* Nếu dữ liệu là **cuốn sách**, thì metadata chính là **bìa sách, mục lục, mã ISBN, tác giả, ngày xuất bản**.
+
+---
+
+### 2. Vai trò
+
+* **Quản lý**: Biết ai tạo ra, khi nào, thuộc phòng ban nào.
+* **Tìm kiếm**: Dễ tra cứu bằng từ khóa, loại tài liệu, thẻ tag.
+* **Kiểm soát**: Biết tài liệu nào là bản mới nhất, ai được quyền xem.
+* **Liên kết**: Giúp hệ thống kết nối dữ liệu với nhau.
+
+---
+
+### 3. Ví dụ thực tế
+
+📂 Với một file văn bản `leave_policy_v2.docx`, metadata có thể là:
+
+* `Tên file`: leave\_policy\_v2.docx
+* `Kích thước`: 2.1 MB
+* `Ngày tạo`: 01/01/2025
+* `Ngày sửa cuối`: 21/09/2025
+* `Tác giả`: Nguyễn Văn A
+* `Loại tài liệu`: Policy
+* `Tags`: \[“nghỉ phép”, “nhân sự”]
+
+---
+
+### 4. Phân loại metadata
+
+* **Descriptive metadata** (mô tả): Tác giả, tiêu đề, từ khóa, abstract.
+* **Structural metadata** (cấu trúc): Cách tài liệu được tổ chức, các chương, liên kết giữa file.
+* **Administrative metadata** (quản trị): Quyền truy cập, ngày sửa đổi, phiên bản, định dạng file.
+
+---
+
+👉 Nói ngắn gọn: **Metadata giống như “nhãn dán” trên dữ liệu**, giúp biết dữ liệu đó là gì, ai làm ra, thuộc loại nào, và dùng thế nào.
+
+Bạn muốn tôi giải thích metadata theo **góc nhìn kỹ thuật (database, JSON schema)** hay **góc nhìn quản trị (quy trình, chính sách)** để áp dụng cho hệ thống tài liệu của bạn?
+
 
 ---
 
