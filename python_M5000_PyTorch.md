@@ -90,3 +90,80 @@ Your current packages (`huggingface_hub`, `transformers`, `sentence-transformers
   - Visit https://pytorch.org/get-started/previous-versions/ for other compatible PyTorch versions if needed.
 
 If you encounter specific errors during this process, share them, and I can provide further assistance.
+
+
+---
+
+Rồi, mình hiểu hệ thống bạn rồi 👍.
+Bạn đang chạy trên **GPU Quadro M5000 (CUDA 11.6)** với **PyTorch 1.13.1+cu116**, nên bộ thư viện phải đồng bộ về phiên bản cũ (không thể lên PyTorch 2.x).
+
+Dựa trên script `evaluate2.py` và các lỗi bạn gặp, mình tạo cho bạn file `requirements.txt` **ổn định nhất** để chạy được với M5000:
+
+---
+
+### 📄 requirements.txt
+
+```txt
+# Core deep learning
+torch==1.13.1+cu116
+torchvision==0.14.1+cu116
+torchaudio==0.13.1+cu116
+--extra-index-url https://download.pytorch.org/whl/cu116
+
+# Sentence embeddings
+sentence-transformers==2.2.2
+transformers==4.30.2
+huggingface_hub==0.13.4
+tokenizers==0.13.3
+
+# Data & processing
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Vietnamese NLP
+pyvi>=0.1.1
+# underthesea>=6.7.0   # tùy chọn nếu muốn thêm tokenizer khác
+
+# Utilities
+accelerate==0.20.3
+pathlib
+```
+
+---
+
+### 🔧 Cách dùng
+
+1. Lưu file trên vào `requirements.txt`.
+2. Cài bằng:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Kiểm tra lại PyTorch có nhận GPU:
+
+   ```bash
+   python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+   ```
+
+   Bạn sẽ thấy:
+
+   ```
+   1.13.1+cu116 True Quadro M5000
+   ```
+
+---
+
+👉 Bộ này đảm bảo:
+
+* `sentence-transformers==2.2.2` dùng được với PyTorch 1.13.
+* `transformers==4.30.2` không đòi `torch>=2.x`.
+* `huggingface_hub==0.13.4` giữ lại `cached_download` (bắt buộc cho sentence-transformers cũ).
+
+---
+
+Bạn có muốn mình gói luôn thành **environment.yml** (cho Conda) để bạn tạo môi trường ảo sạch sẽ, tránh xung đột pip không?
