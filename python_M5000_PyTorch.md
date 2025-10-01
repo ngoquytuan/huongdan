@@ -167,3 +167,77 @@ pathlib
 ---
 
 Bạn có muốn mình gói luôn thành **environment.yml** (cho Conda) để bạn tạo môi trường ảo sạch sẽ, tránh xung đột pip không?
+
+
+Mình thấy ngay vấn đề 👇
+
+Bạn đã **hạ `huggingface_hub` xuống 0.13.4** để giữ lại `cached_download` (đúng), nhưng lúc này `accelerate` + `transformers` lại đòi một hàm **mới** trong `huggingface_hub` (`split_torch_state_dict_into_shards`), hàm này chỉ có trong **huggingface_hub >= 0.14.0**.
+
+➡️ Tóm gọn:
+
+* `sentence-transformers==2.2.2` cần `cached_download` (chỉ có ở `huggingface_hub<=0.13.4`)
+* `transformers 4.30.2` + `accelerate` lại đòi `split_torch_state_dict_into_shards` (chỉ có ở `huggingface_hub>=0.14`)
+
+Hai yêu cầu này **xung đột nhau**.
+
+---
+
+### ✅ Cách giải quyết
+
+Có 2 hướng:
+
+#### 🔹 Cách 1 (ổn định, khuyên dùng):
+
+Hạ cả `transformers` và `accelerate` xuống **phiên bản cùng thời** với `sentence-transformers 2.2.2` (giữa năm 2022).
+Ví dụ:
+
+```bash
+pip install transformers==4.27.4 sentence-transformers==2.2.2 huggingface_hub==0.13.4 accelerate==0.17.1
+```
+
+Bộ này chạy ổn với **PyTorch 1.13.1** và GPU M5000.
+
+---
+
+#### 🔹 Cách 2 (mới hơn, khó hơn):
+
+* Giữ `huggingface_hub` >=0.14 để có `split_torch_state_dict_into_shards`.
+* Nhưng phải vá code của `sentence-transformers` (bỏ `cached_download`, thay bằng `hf_hub_download`).
+
+Cách này cần sửa code trong site-packages, hơi phiền.
+
+---
+
+### 📌 Đề xuất cho bạn
+
+Với GPU cũ và PyTorch 1.13, mình khuyên dùng **Cách 1**:
+
+**requirements.txt (bản fix cuối cùng cho bạn):**
+
+```txt
+torch==1.13.1+cu116
+torchvision==0.14.1+cu116
+torchaudio==0.13.1+cu116
+--extra-index-url https://download.pytorch.org/whl/cu116
+
+sentence-transformers==2.2.2
+transformers==4.27.4
+huggingface_hub==0.13.4
+tokenizers==0.13.3
+accelerate==0.17.1
+
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+pyvi>=0.1.1
+pathlib
+```
+
+---
+
+👉 Hỏi nhanh: bạn muốn mình viết sẵn lệnh **gỡ sạch thư viện cũ** (uninstall hết rồi cài lại đúng bộ này) để chắc chắn không xung đột nữa không?
+
