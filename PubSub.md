@@ -288,4 +288,80 @@ Nếu bạn nói mình biết bạn đang định làm kiểu gì (ví dụ: **�
 [4]: https://docs.solace.com/API/MQTT/Using-MQTT.htm?utm_source=chatgpt.com "Using MQTT - Solace"
 
 
+Có — bản **Solace Event Broker Standard Edition** là **miễn phí** (không phải “trial” theo ngày), nhưng có **giới hạn theo “scaling tier”/tài nguyên** và một vài ngưỡng hard-cap. ([Solace Docs][1])
+
+## Các giới hạn bạn hay gặp nhất khi dùng miễn phí (Standard)
+
+* **Số kết nối client đồng thời (concurrent connections)**
+
+  * **Mặc định** broker thường để **100** kết nối. ([Solace Docs][2])
+  * Bạn có thể **tăng bằng System Scaling Parameters**, nhưng **Standard Edition bị cap ở “tier 1K” (tối đa ~1,000 connections)** theo thông tin cộng đồng/quickstart; vượt quá mức Standard hỗ trợ thì broker có thể **không start**. ([Solace Community][3])
+* **Một số tính năng không dùng được nếu bạn để tier 100 connections**
+
+  * Khi cấu hình ở mức **100 connections**, sẽ **không có DMR (Dynamic Message Routing) và MNR (Multi-Node Routing)**. ([Solace Docs][2])
+* **Giới hạn về “queue messages” (sức chứa số message trong spool)**
+
+  * Tài liệu nêu **Standard: tối đa 240,000,000 queue messages**, còn **Enterprise: 3,000,000,000**; nếu set cao hơn mức Standard hỗ trợ thì broker có thể **fail to start**. ([Solace Docs][2])
+* **Số Message VPNs**
+
+  * Nhiều người dùng Standard gặp trần **3 VPN (bao gồm VPN “default”)** theo cộng đồng (đây là thông tin community, không phải trang giới hạn chính thức). ([Solace Community][4])
+
+## “Miễn phí” nhưng lưu ý về key Enterprise Evaluation
+
+Nếu bạn **nhập product key Enterprise Evaluation** (để thử Enterprise), thì đó là **90 ngày**; hết hạn broker **ngừng hoạt động** và **mất cấu hình** nếu không upgrade trước khi hết hạn. ([Solace Docs][5])
+
+## Cách tự kiểm tra bạn đang bị giới hạn gì trên broker của mình
+
+Trên Ubuntu, vào CLI của broker rồi xem thông tin hệ thống/limits:
+
+```bash
+sudo docker exec -it solace /usr/sw/loads/currentload/bin/cli
+# trong CLI:
+show system
+```
+
+Bạn sẽ thấy “current/max connections” (và các thông số liên quan).
+
+Nếu bạn nói mình biết use-case của bạn (bao nhiêu thiết bị/client, cần MQTT QoS/queue/persistence, có cần event-mesh/DMR không), mình sẽ gợi ý bạn nên để tier nào và cấu hình gì để không đụng trần sớm.
+
+[1]: https://docs.solace.com/Software-Broker/SW-Broker-Set-Up/Setting-Up-SW-Brokers.htm?utm_source=chatgpt.com "Editions of the Software Event Broker - Solace"
+[2]: https://docs.solace.com/Software-Broker/System-Scaling-Parameters.htm?utm_source=chatgpt.com "Using System Scaling Parameters - Solace"
+[3]: https://community.solace.com/t/increasing-max-connection-limit-of-your-pubsub-broker/234?utm_source=chatgpt.com "Increasing max-connection limit of your PubSub+ broker"
+[4]: https://community.solace.com/t/maximum-number-of-vpns-in-a-cluster/68?utm_source=chatgpt.com "Maximum number of VPNs in a cluster - community.solace.com"
+[5]: https://docs.solace.com/Software-Broker/Solace-SW-Broker-Set-Up/Admin/SW-Broker-Upgrade/Resources/Documentation-Set.htm?utm_source=chatgpt.com "Editions of PubSub+ Event Broker: Software - docs.solace.com"
+
+
+**Message VPN (Message Virtual Private Network)** trong Solace là một “**không gian/miền messaging tách biệt**” nằm bên trong cùng một event broker.
+
+Nói dễ hiểu: **1 broker vật lý** có thể được “chia” thành **nhiều broker ảo**, mỗi broker ảo chính là **một Message VPN**.
+
+## Message VPN dùng để làm gì?
+
+* **Tách biệt topic space và client**: client thuộc VPN A chỉ thấy/nhận message trong VPN A, không “lẫn” với VPN B. ([Solace Docs][1])
+* **Multi-tenant / tách môi trường**: dùng để tách **dev / test / prod**, hoặc tách các team/ứng dụng dùng chung một broker mà vẫn độc lập. ([Solace Docs][1])
+
+## Bên trong một Message VPN có những gì?
+
+Bạn có thể coi mỗi VPN là một “container cấu hình” riêng, thường sẽ chứa (và áp chính sách cho):
+
+* **Clients / authentication / authorization**
+* **Queues, topic endpoints, subscriptions**
+* **Cấu hình dịch vụ giao thức** (ví dụ MQTT, REST, AMQP, SMF/Web Transport…) theo từng VPN ([help.pubsub.em.services.cloud.sap][2])
+* VPN có thể **enable/disable**; disable là sẽ **ngắt hết client** của VPN đó và từ chối kết nối mới cho tới khi enable lại. ([help.pubsub.em.services.cloud.sap][2])
+
+## Khác gì so với “broker MQTT bình thường”?
+
+MQTT “chuẩn” thường bạn nghĩ 1 broker = 1 không gian topic. Còn trong Solace, **broker = nền tảng**, và **Message VPN = namespace/tenant**. Vì vậy Solace dễ chạy kiểu “nhiều hệ thống độc lập trên cùng 1 broker” hơn.
+
+## Trên máy bạn thì dùng thế nào?
+
+* Nếu bạn dùng cá nhân/POC: thường chỉ cần dùng **VPN mặc định** và tạo client/queue/topic trong đó là đủ.
+* Bạn vẫn có thể tạo thêm VPN để tách dự án/môi trường; nhưng **số VPN tối đa phụ thuộc loại broker/edition**. ([Solace Docs][3])
+
+Nếu bạn nói bạn đang connect bằng **MQTT** hay **SMF/JMS/AMQP**, mình sẽ chỉ đúng chỗ trong PubSub+ Manager để xem “VPN nào đang dùng”, và cách cấu hình client kết nối vào VPN đó.
+
+[1]: https://docs.solace.com/Get-Started/message-vpn.htm?utm_source=chatgpt.com "Message VPNs - Solace"
+[2]: https://help.pubsub.em.services.cloud.sap/Cloud/Broker-Manager/message-vpn-settings.htm?utm_source=chatgpt.com "Viewing and Managing the Message VPN"
+[3]: https://docs.solace.com/Features/VPN/Configuring-VPNs.htm?utm_source=chatgpt.com "Configuring Message VPNs - Solace"
+
 
