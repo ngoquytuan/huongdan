@@ -364,4 +364,173 @@ Nếu bạn nói bạn đang connect bằng **MQTT** hay **SMF/JMS/AMQP**, mình
 [2]: https://help.pubsub.em.services.cloud.sap/Cloud/Broker-Manager/message-vpn-settings.htm?utm_source=chatgpt.com "Viewing and Managing the Message VPN"
 [3]: https://docs.solace.com/Features/VPN/Configuring-VPNs.htm?utm_source=chatgpt.com "Configuring Message VPNs - Solace"
 
+Mình đoán bạn đang nói **SWIM trong hàng không** và “**fficER1**” là **FF-ICE/R1** (Release 1). Nếu đúng ngữ cảnh này thì:
+
+## 1) Solace có phải “router” của SWIM không?
+
+**Gần đúng**, nhưng gọi chính xác hơn là **event broker / messaging backbone** của SWIM.
+
+* **SWIM** là **khái niệm + tiêu chuẩn + hạ tầng + governance** để trao đổi thông tin ATM qua các “information services”. ([Eurocontrol][1])
+* **FF-ICE/R1** là các **dịch vụ thông tin** hoạt động **trong môi trường SWIM**. ([Eurocontrol][2])
+* Trong bức tranh đó, **Solace PubSub+** thường đóng vai trò lớp **phân phối/định tuyến sự kiện**: hệ thống A publish, hệ thống B/C/D subscribe hoặc request/receive, broker sẽ **route theo topic/subscription, fan-out, lọc, và có thể đảm bảo giao nhận (queue/persistence)**. Trang Solace về ANSP cũng mô tả họ “routing real-time … data” cho SWIM. ([Solace][3])
+
+Một ví dụ “ngoài đời”: tài liệu FAA về **SWIM Cloud Distribution Services (SCDS)** nói họ cung cấp real-time SWIM data cho công chúng **qua Solace JMS messaging**. 
+
+Điểm quan trọng: Solace **không thay thế toàn bộ SWIM** (governance, định nghĩa information service, data model, policy/identity…), nó chủ yếu là **lớp transport/routing & event distribution** trong kiến trúc SWIM. ([Eurocontrol][1])
+
+## 2) Solace có demo/tutorial nào về SWIM không?
+
+Có “tài liệu theo use-case” và có demo cộng đồng, nhưng **ít kiểu codelab SWIM end-to-end** như bạn mong.
+
+**Tài liệu/use-case của Solace:**
+
+* Blog: *How Solace Supports SWIM Air Traffic Management Systems* ([Solace][4])
+* Trang giải pháp Aviation/ANSPs (có sơ đồ “SWIM core messaging”) ([Solace][3])
+* Datasheet “SWIM” trên resource hub ([Solace][5])
+
+**Demo/POC có sẵn liên quan SWIM (FAA SCDS):**
+
+* Repo “FAA SWIM Feed GUI” (hiển thị dữ liệu SWIM và demo filtering/subscription theo topic; repo cũng trỏ sang “SWIM Feed Handler” để relay feed vào Solace broker). ([GitHub][6])
+
+**Codelab để bạn tự dựng “SWIM-like messaging backbone” trên broker local:**
+
+* Solace Developer Portal và tutorial pattern pub/sub (để bạn map các “information services” → topics/queues nhanh). ([solace.dev][7])
+
+Nếu bạn mô tả nhanh 3 thứ:
+
+1. bạn định trao đổi dữ liệu gì (FIXM/AIXM/NOTAM/weather… hay payload riêng),
+2. các service của FF-ICE/R1 bạn cần (6 services theo EUROCONTROL), ([Eurocontrol][2])
+3. bạn muốn pub/sub hay request/reply,
+   mình sẽ đề xuất ngay **topic hierarchy + queue mapping + security model (VPN/users/ACL)** để Solace “đóng vai router” đúng kiểu SWIM.
+
+[1]: https://www.eurocontrol.int/concept/system-wide-information-management?utm_source=chatgpt.com "System-wide information management (SWIM) | EUROCONTROL"
+[2]: https://www.eurocontrol.int/concept/flight-and-flow-information-collaborative-environment?utm_source=chatgpt.com "Flight and flow information for a collaborative environment"
+[3]: https://solace.com/solutions/industries/aviation/ansps/ "ANSPs | Solace"
+[4]: https://solace.com/blog/solace-swim-air-traffic-management/?utm_source=chatgpt.com "How Solace Supports SWIM Air Traffic Management Systems"
+[5]: https://solace.com/resources/datasheets/swim-datasheet?utm_source=chatgpt.com "SWIM-Datasheet - Solace"
+[6]: https://github.com/andrew-j-roberts/faa-swim-feed-gui "GitHub - andrew-j-roberts/faa-swim-feed-gui: a GUI that displays real-time FAA SWIM data and demonstrates string-based filtering of geolocation data using Solace"
+[7]: https://www.solace.dev/?utm_source=chatgpt.com "Home | Solace - PubSub+ for Developers"
+
+
+Đúng hướng rồi: bạn có thể dùng Solace như **lớp phân phối/định tuyến sự kiện** cho “SWIM-like services” (FIXM/AIXM/NOTAM/Weather), và riêng **FF-ICE/R1** thì có **6 services**: **Filing**, **Flight Data Request** (bắt buộc) và **Trial**, **Planning**, **Notification**, **Publication** (tuỳ chọn). 
+
+Dưới đây là một **blueprint** để bạn triển khai PoC trên broker local (rồi mở rộng ra nhiều hệ thống).
+
+---
+
+## 1) Nên tổ chức Solace thế nào
+
+### Message VPN
+
+Tạo 1 VPN cho từng môi trường (ví dụ `swim-dev`, `swim-test`, `swim-prod`) để **tách namespace/topic/queues/ACL** giữa các môi trường. (VPN = “virtual broker” trong cùng 1 broker). ([docs.solace.com][1])
+
+### Topic hierarchy (gợi ý)
+
+Thiết kế topic có thứ bậc rõ ràng để sau này lọc/subscription dễ bằng wildcard (`*` / `>`). ([docs.solace.com][2])
+
+Ví dụ format:
+`swim/{env}/{domain}/{standard}/{version}/{service}/{msgType}/...`
+
+* `domain`: `ffice`, `aixm`, `notam`, `wx`
+* `standard`: `fixm`, `aixm`, `icao`, `iwxxm` (tuỳ bạn đóng gói)
+* `service`: 6 service FF-ICE/R1, hoặc service SWIM khác
+* `msgType`: `submit|update|cancel|ack|rej|event|snapshot|delta`…
+
+---
+
+## 2) Map 6 FF-ICE/R1 services sang “pattern” trên Solace
+
+Solace hỗ trợ **publish/subscribe**, **point-to-point**, **request/reply**. ([docs.solace.com][3])
+
+### A. Filing Service (request/reply)
+
+* **Request topic** (AU → ASP):
+  `swim/dev/ffice/fixm/r1/filing/submit` (hoặc `update`, `cancel`)
+* **Reply**: dùng `reply-to` + `correlation-id` để trả ACK/REJ đúng phiên. ([tutorials.solace.dev][4])
+* Khuyến nghị: consumer của ASP đọc request từ **queue** (đảm bảo không mất), reply ra topic/queue theo `reply-to`.
+
+### B. Flight Data Request Service (request/reply)
+
+* Request: `.../flight-data-request/query`
+* Reply: `.../flight-data-request/response`
+* Cũng dùng `reply-to`/correlation tương tự. ([tutorials.solace.dev][4])
+
+### C. Trial Service (request/reply)
+
+* Request: `.../trial/request`
+* Reply: `.../trial/response`
+* Bản chất “what-if”, không làm thay đổi plan đang filed.
+
+### D. Planning Service (pub/sub hoặc request/reply tuỳ bạn)
+
+* Nếu bạn muốn “proposal/feedback” kiểu collaboration: pub/sub theo topic (fan-out).
+* Nếu bạn muốn “tính toán phương án” giống dịch vụ: request/reply.
+
+### E. Notification Service (pub/sub, thường cần guaranteed)
+
+* Event: `.../notification/dep` và `.../notification/arr` (DEP/ARR) — đây đúng loại flow Notification mô tả. 
+* Người nhận (nhiều bên) thường nên nhận qua **durable queue** để không mất (consumer offline vẫn nhận được).
+
+### F. Publication Service (subscription feed)
+
+* Đây là “data feed theo subscription”, rất hợp với Solace:
+
+  * Producer publish: `.../publication/flightplan/{accepted|update|cancel}/...`
+  * Mỗi subscriber có **queue riêng**, gắn **topic subscription** để “lọc” theo tiêu chí (ví dụ FIR, dep aerodrome, airline…). “Topic-to-Queue Mapping” là tính năng làm đúng việc này. ([tutorials.solace.dev][5])
+
+---
+
+## 3) FIXM/AIXM/NOTAM/Weather nên đặt topic thế nào (gợi ý nhanh)
+
+### FIXM (FF-ICE payload)
+
+* `swim/dev/ffice/fixm/r1/filing/submit/gufi/{GUFI}`
+* `swim/dev/ffice/fixm/r1/publication/flightplan/update/gufi/{GUFI}`
+* `swim/dev/ffice/fixm/r1/notification/dep/gufi/{GUFI}`
+
+### AIXM (aeronautical data)
+
+* `swim/dev/aixm/aixm/5.1/snapshot/region/{REGION}`
+* `swim/dev/aixm/aixm/5.1/delta/airspace/{AIRSPACE_ID}`
+
+### NOTAM
+
+* `swim/dev/notam/icao/1.0/new/aerodrome/{ICAO}`
+* `swim/dev/notam/icao/1.0/cancel/{NOTAM_ID}`
+
+### Weather (IWXXM / METAR/TAF…)
+
+* `swim/dev/wx/iwxxm/3.0/metar/{ICAO}`
+* `swim/dev/wx/iwxxm/3.0/taf/{ICAO}`
+
+Bạn sẽ tận dụng wildcard để subscribe:
+
+* Theo sân bay: `.../metar/*` (1 level) hoặc theo mọi thứ dưới prefix: `swim/dev/wx/>` ([docs.solace.com][2])
+
+---
+
+## 4) Các bước “làm ngay” trên broker của bạn (PoC tối thiểu)
+
+1. Trong VPN (có thể dùng VPN mặc định trước), tạo 2 queue cho **2 dịch vụ bắt buộc**:
+
+   * `Q.FFICE.FILING.IN` (sub: `swim/dev/ffice/fixm/r1/filing/*`)
+   * `Q.FFICE.FDR.IN` (sub: `swim/dev/ffice/fixm/r1/flight-data-request/*`)
+2. Tạo queue cho **Publication** cho 1 subscriber demo:
+
+   * `Q.FFICE.PUB.SUBSCRIBER1` (sub lọc theo tiêu chí bạn muốn)
+3. Viết 2 “service” nhỏ (có thể tạm bằng script) để:
+
+   * Consumer đọc `Q.FFICE.FILING.IN` → trả ACK/REJ qua `reply-to`
+   * Producer publish update/cancel → subscriber nhận qua `Q.FFICE.PUB.SUBSCRIBER1`
+
+---
+
+Nếu bạn muốn, mình có thể đưa luôn một “lab 30 phút” (kèm lệnh test bằng MQTT/REST hoặc code Python/Node) để bạn chạy được end-to-end: **Filing → ACK → Publication update → Notification DEP/ARR** trên chính broker Ubuntu của bạn. Bạn muốn test bằng giao thức nào (MQTT hay REST/AMQP/SMF)?
+
+[1]: https://docs.solace.com/Configuring-and-Managing-Routers/Managing-Message-VPNs.htm?utm_source=chatgpt.com "Message VPNs - docs.solace.com"
+[2]: https://docs.solace.com/Messaging/Wildcard-Charaters-Topic-Subs.htm?utm_source=chatgpt.com "Wildcard Characters in Topic Subscriptions - Solace"
+[3]: https://docs.solace.com/Get-Started/message-exchange-patterns.htm?utm_source=chatgpt.com "Message Exchange Patterns - Solace"
+[4]: https://tutorials.solace.dev/c/request-reply/?utm_source=chatgpt.com "Request/Reply | Solace API Tutorials"
+[5]: https://tutorials.solace.dev/c/topic-to-queue-mapping/?utm_source=chatgpt.com "Topic to Queue Mapping | Solace API Tutorials"
+
 
