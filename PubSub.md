@@ -534,3 +534,844 @@ Nếu bạn muốn, mình có thể đưa luôn một “lab 30 phút” (kèm l
 [5]: https://tutorials.solace.dev/c/topic-to-queue-mapping/?utm_source=chatgpt.com "Topic to Queue Mapping | Solace API Tutorials"
 
 
+Bạn đã cài xong **Solace core router (PubSub+ Event Broker)** thì bước tiếp theo nên đi theo 2 trục song song: **(1) ổn định–an toàn–vận hành được** và **(2) tạo giá trị nhanh bằng PoC SWIM/FF-ICE** (để có “demo được, đo được”). Dưới đây là lộ trình ngắn hạn & dài hạn theo hướng ___X___ đang làm với Solace/CAAS/ST.    
+
+---
+
+## 1) Ngắn hạn (0–6 tuần): “Chạy ổn + an toàn + quan sát được”
+
+### A. Chốt kiến trúc & độ sẵn sàng
+
+* **Xác định topology**: single node lab hay **HA (active/standby)** / **cluster** (tùy mục tiêu PoC vs tiền sản xuất).
+* **Network baseline**: IP/DNS/NTP chuẩn, phân vùng VLAN/Firewall rule rõ ràng (client ports, management, monitoring).
+* **Capacity cơ bản**: baseline throughput/latency + cấu hình **spool/queue** theo nhu cầu PoC (đặc biệt nếu có subscriber chậm).
+
+### B. Security “tối thiểu nhưng đúng”
+
+* **TLS/mTLS** cho client connections; chuẩn hóa **CA/cert lifecycle** (gợi ý gắn với hướng SWIM/Trust framework sau này).
+* **RBAC/ACL theo Message VPN**: tách môi trường (DEV/LAB/UAT), tách domain (FLIGHT/MET/SURVEILLANCE…).
+* **Audit log**: bật và đẩy log tập trung.
+
+### C. Observability & vận hành
+
+* Bật **monitoring/metrics** (SNMP/Prometheus/exporter tùy stack), **syslog**, cảnh báo (CPU/mem/spool, queue depth, dropped msgs).
+* **Backup/restore** cấu hình + chuẩn hóa “runbook” (restart, rotate cert, scale up, xử lý queue backlog).
+* **Smoke test chuẩn**: pub/sub, queue, persistence, reconnect, failover (nếu HA).
+
+> Kết quả mong muốn sau 6 tuần: core router không chỉ “cài xong” mà **có chuẩn vận hành**, có log/metrics, có security tối thiểu, và test fail/recovery cơ bản.
+
+---
+
+## 2) Ngắn hạn (6–12 tuần): “PoC có giá trị” (SWIM nhỏ + 1 luồng dữ liệu thật)
+
+Chọn **1–2 use case** dễ chứng minh lợi ích và sát SWIM/FF-ICE:
+
+### PoC #1 (khuyến nghị): **Surveillance Data Service**
+
+* Ingest **ASTERIX Cat 21 → JSON** (tài liệu mapping CAAS đã nhắc) rồi publish theo topic taxonomy.  
+* Mục tiêu: hiển thị realtime + subscriber (dashboard/analytics) + cơ chế replay/retention tối thiểu.
+
+### PoC #2: **MET Service (METAR/TAF/SIGMET)**
+
+* Publish các bản tin MET theo chuẩn nội bộ (sau này tiến tới IWXXM), làm pipeline đơn giản: source → broker → 2 subscribers (ATC tool + archive).
+
+### Việc cần làm để PoC “đúng hướng SWIM”
+
+* **Định nghĩa topic taxonomy** ngay từ đầu (ví dụ: `swim/<domain>/<type>/<region>/<source>/<version>`), tránh topic tự phát.
+* Chuẩn hóa **schema & versioning** (JSON schema / event catalog), và quy tắc “backward compatible”.
+
+> Kết quả mong muốn: ___X___ có **demo end-to-end** kiểu SWIM “publish/subscribe theo sự kiện” đúng tinh thần event mesh Solace. 
+
+---
+
+## 3) Trung hạn (3–12 tháng): “Từ PoC sang sandbox SWIM + FF-ICE Lab”
+
+Song song 2 đường:
+
+### A. SWIM sandbox nội bộ ___X___
+
+* Mở rộng từ 1–2 dịch vụ thành **SWIM Core mini**: service registry/cert authN/authZ/monitoring, event portal/catalog.
+* Kết nối 1–2 hệ thống thật (MET/AIS/surveillance) + 1 hệ thống giả lập.
+* Chuẩn hóa quy trình DevOps: pipeline triển khai, cấu hình theo môi trường, kiểm thử contract/schema.
+
+### B. FF-ICE Lab (đúng hướng CAAS đang chuẩn bị mixed-mode)
+
+* Dựng mô hình **mixed-mode**: FPL2012 + eFPL (FF-ICE) (ít nhất ở mức mô phỏng) vì CAAS cũng nhấn mạnh giai đoạn quá độ. 
+* Xây “mảnh nhỏ nhưng chuẩn”:
+
+  * mô-đun đọc/ghi eFPL (FIXM) + validation cơ bản,
+  * luồng message/event: submit → evaluate → response (ACK/REJ/MAN…), status updates… (mô phỏng).
+* Tách rõ: **broker làm distribution layer**, còn **business services** nằm ở các adapter/microservice.
+
+### C. Con người & tổ chức
+
+* Lập nhóm SWIM/FF-ICE nòng cốt: R&D chủ trì, phối hợp Kỹ thuật chất lượng + Huấn luyện CNS (để chuẩn hóa quy trình đào tạo/vận hành). 
+
+---
+
+## 4) Dài hạn (1–3 năm): “Event Mesh thành xương sống SWIM quốc gia + sẵn sàng FF-ICE”
+
+Căn theo lộ trình khu vực CAAS chia sẻ (mốc 2028/2030) để “đi cùng nhịp” thay vì tự bơi. 
+
+### Mục tiêu kỹ thuật
+
+* Triển khai **event mesh đa site** (on-prem + cloud/hybrid), HA/DR đầy đủ.
+* Bộ dịch vụ SWIM theo domain: FLIGHT, AERONAUTICAL, MET, SURVEILLANCE…; mỗi domain có taxonomy + schema governance.
+* **Security/Trust framework**: PKI, cert policy, quản trị khóa (tiến tới tương thích mô hình khu vực).
+
+### Mục tiêu sản phẩm ___X___
+
+* Gói “SWIM Node / SWIM Gateway” cho VATM.
+* “FF-ICE Gateway” + toolkit kiểm thử/validation eFPL, hỗ trợ vận hành mixed-mode.
+* Mở rộng sang AI real-time (anomaly detection, event-triggered assistant) khi data pipeline đã ổn. 
+
+---
+
+## 5) Gợi ý checklist “ngày mai làm gì” (rất thực dụng)
+
+1. Chụp lại **as-built**: topology, ports, VPN/users/ACL, cert status, backup location.
+2. Bật **syslog + metrics + alert** (ít nhất queue/spool/CPU/mem).
+3. Viết 1 trang **runbook**: restart/backup/rotate cert/failover test.
+4. Chọn **1 PoC** (mình nghiêng về Cat21→JSON hoặc MET) và chốt taxonomy + schema versioning. 
+5. Lên lịch workshop kỹ thuật với Solace/ST (các mốc Solace đã gợi ý quanh **tuần 26/01/2026** hoặc **tuần 09/02/2026**). 
+
+Nếu bạn nói rõ bạn đang triển khai core router theo mô hình nào (**lab 1 node**, **HA**, hay **cluster**) và mục tiêu PoC bạn muốn chốt (Cat21 hay MET hay FF-ICE flow), mình sẽ viết luôn **kế hoạch triển khai 4–6 tuần dạng workplan** (đầu việc, người phụ trách, tiêu chí nghiệm thu) theo đúng ngữ cảnh ___X___.
+
+
+**TBO (Trajectory-Based Operations)** là **khái niệm điều hành không lưu dựa trên quỹ đạo 4D (4D trajectory)**, được ICAO và các chương trình như FAA NextGen, EUROCONTROL SESAR, CAAS áp dụng để **nâng cao hiệu quả và an toàn quản lý bay**.
+
+---
+
+# 🌐 **TBO là gì?**
+
+**TBO = Điều hành không lưu dựa trên quỹ đạo bay được chia sẻ, thống nhất và cập nhật liên tục giữa tất cả các bên liên quan.**
+
+Trong TBO:
+
+* Mỗi chuyến bay không chỉ nộp *một kế hoạch bay chữ/tin nhắn* như FPL2012
+* Mà cung cấp **quỹ đạo 4D (4D Trajectory: vị trí + độ cao + thời gian)**
+* Quỹ đạo này có thể được **thương lượng, điều chỉnh theo thời gian thực** giữa:
+
+  * Hãng hàng không (AO/eAU)
+  * Nhà cung cấp dịch vụ không lưu (ANSP/eASP)
+  * ATFM, sân bay, và các hệ thống liên quan
+
+TBO hướng đến **cùng một “agreement trajectory”** – tức là mọi bên đều hiểu và sử dụng một quỹ đạo duy nhất, thống nhất.
+
+---
+
+# 🎯 **Mục tiêu của TBO**
+
+1. **Tối ưu hoá quỹ đạo bay** → tiết kiệm nhiên liệu, giảm delay
+2. **Tăng khả năng dự đoán** của hệ thống ATM
+3. **Giảm tải cho ATC** → ít phải can thiệp bằng radio
+4. **Nâng cao an toàn** nhờ giảm xung đột và sai sót
+5. **Tự động hoá xử lý dữ liệu chuyến bay** trong không lưu
+
+---
+
+# 🧩 **Mối liên hệ giữa TBO – FF-ICE – SWIM**
+
+| Thành phần | Vai trò                                                                       |
+| ---------- | ----------------------------------------------------------------------------- |
+| **FF-ICE** | Chuẩn dữ liệu giúp chuyến bay gửi quỹ đạo 4D, cập nhật, thương lượng (eFPL).  |
+| **SWIM**   | Hạ tầng chia sẻ thông tin thời gian thực giữa ATM–airlines–airport.           |
+| **TBO**    | Hoạt động điều hành không lưu tận dụng dữ liệu và công nghệ từ FF-ICE + SWIM. |
+
+👉 Nói cách khác:
+**TBO là mục tiêu cuối cùng**,
+**FF-ICE là cách mô tả dữ liệu**,
+**SWIM là con đường truyền dữ liệu**.
+
+---
+
+# ✈️ Ví dụ đơn giản về TBO trong thực tế
+
+### Trước đây (FPL2012 – không TBO):
+
+* Hãng nộp một kế hoạch bay cố định.
+* ATC điều chỉnh khi xảy ra tắc nghẽn, thời tiết xấu, luồng không lưu…
+* Thay đổi thường chậm, thủ công, thông qua radio.
+
+### Với TBO:
+
+* Hãng nộp “trajectory intent” → hệ thống ATM phân tích tự động.
+* Nếu có xung đột, ATFM/ATC gửi phản hồi dạng “NEGOTIATE”.
+* Hai bên thống nhất quỹ đạo tối ưu (“Agreed Trajectory”).
+* Trong quá trình bay, quỹ đạo có thể cập nhật theo thời gian thực bằng SWIM.
+
+Kết quả: **bay trơn tru hơn, ít delay hơn, dự đoán chính xác hơn**.
+
+---
+
+# 📌 TBO ở khu vực APAC và Singapore
+
+* CAAS hiện áp dụng FF-ICE/R1 và chuẩn bị cho TBO theo hướng dẫn ICAO.
+* APAC FF-ICE Ad-hoc Group đang xây *Regional Implementation Plan* 2026–2032 để tiến tới TBO đầy đủ.
+* Việt Nam (VATM/___X___) sẽ cần chuẩn bị từ bây giờ để theo kịp lộ trình khu vực.
+
+---
+
+
+* Viết **giải thích TBO theo cách trình bày lãnh đạo**
+* Viết **mối liên hệ TBO – FF-ICE – SWIM** trong báo cáo chiến lược
+* Chuẩn bị **slide TBO** cho hội nghị / báo cáo công tác
+
+---
+
+Báo cáo buổi làm việc với Solace ngày 05/12/2025
+(Chủ đề: FF-ICE, SWIM và ứng dụng AI cho ___X___)
+
+---
+
+## I. Thông tin chung
+
+* **Thời gian**: Chiều 05/12/2025
+* **Địa điểm**: Văn phòng Solace tại Singapore
+* **Thành phần**: Đại diện ___X___, ST Engineering và Solace 
+* **Mục tiêu**:
+
+  * Tìm hiểu năng lực công nghệ event-driven của Solace và kinh nghiệm triển khai trong lĩnh vực hàng không.
+  * Trao đổi định hướng áp dụng **SWIM** và **FF-ICE** cho hạ tầng CNS/ATM của Việt Nam.
+  * Thảo luận cơ hội kết hợp **Solace + ST Engineering + ___X___** trong các sáng kiến chuyển đổi số và AI.
+
+Ngoài ra, Solace đã đề xuất **lịch workshop/đào tạo cho ___X___ tại Singapore** (15/12, và các tuần quanh 26/01 và 09/02/2026) để đào sâu về kiến trúc event-driven và mô hình triển khai cùng ST team. 
+
+---
+
+## II. Tổng quan về Solace và mức độ phù hợp với ___X___
+
+1. **Vị thế thị trường**
+
+   * Solace là nhà cung cấp nền tảng **event-driven integration & streaming (PubSub+ Event Broker)**, cho phép thiết kế và vận hành kiến trúc **event-driven** trên môi trường hybrid/multi-cloud. ([solace.dev][1])
+   * Được **IDC MarketScape 2024** xếp hạng **“Leader”** trong nhóm sản phẩm **Worldwide Event Brokering Software**, nhấn mạnh ưu thế về kiến trúc, bảo mật, khả năng giám sát, “smart topic management” và hỗ trợ đa giao thức. ([Solace][2])
+
+2. **Kinh nghiệm trong ngành hàng không**
+
+   * Solace là **backbone cho hệ thống SWIM thời gian thực của FAA và một số ANSP lớn**, phân phối dữ liệu chuyến bay, khí tượng, điều hành mạng, v.v. theo thời gian thực cho hãng bay và các hệ thống ATM liên quan. ([Solace][3])
+   * Nền tảng event mesh của Solace đã được triển khai trong giao thông **đường bộ (LTA Singapore), cảng biển (PSA), hàng không (CAAS/Changi)**, cho thấy tính ổn định trong các hệ thống hạ tầng trọng yếu. 
+
+3. **Công nghệ cốt lõi liên quan FF-ICE/SWIM/AI**
+
+   * **Event Mesh PubSub+**: kết nối các ứng dụng phân tán, cho phép publish/subscribe sự kiện mà không cần cấu hình point-to-point, hỗ trợ nhiều giao thức mở (MQTT, AMQP, REST, JMS…). ([Solace][4])
+   * Định hướng mới của Solace về **Agentic AI, Conversational Analytics, Event-Triggered Assistants** cho phép gắn AI trực tiếp vào luồng sự kiện thời gian thực – rất phù hợp với các use case giám sát, cảnh báo và hỗ trợ điều hành của ___X___. 
+
+---
+
+## III. Tóm tắt nội dung chính buổi làm việc
+
+1. **Giới thiệu năng lực Solace và các case study ngành hàng không**
+
+   * Solace trình bày kiến trúc **event-driven architecture (EDA)** và cách xây dựng **event mesh** làm “bus dữ liệu thời gian thực” cho toàn bộ hệ sinh thái SWIM/ATM.
+   * Chia sẻ các triển khai thực tế:
+
+     * **FAA SWIM** – hạ tầng phân phối dữ liệu thời gian thực cho NextGen. ([Solace][3])
+     * Các dự án chính phủ số và smart city tại Singapore, Canada, Ấn Độ, Hồng Kông, Dubai, Nhật Bản. ([epicos.com][5])
+
+2. **Thảo luận về SWIM & FF-ICE theo lộ trình ICAO/APAC**
+
+   * ICAO định nghĩa **SWIM** là tập hợp **tiêu chuẩn, hạ tầng và quản trị** cho quản lý và chia sẻ thông tin ATM giữa các bên đủ điều kiện thông qua dịch vụ liên thông. ([icao.int][6])
+   * **FF-ICE** được ICAO thiết kế là thế hệ mới của hệ thống kế hoạch bay, hỗ trợ **trajectory-based operations (TBO)**, chia sẻ quỹ đạo bay tối ưu trong toàn bộ vòng đời chuyến bay; lộ trình hướng tới thay thế FPL 2012 vào khoảng 2034. ([eurocontrol.int][7])
+   * Solace nhấn mạnh SWIM là **key technical enabler** cho FF-ICE, phù hợp với chủ đề “Establishing SWIM – A key enabler for FF-ICE” của ICAO APAC 2025. ([icao.int][8])
+
+3. **Kế hoạch workshop và phối hợp với ST Engineering**
+
+   * Thống nhất sẽ tổ chức **workshop kỹ thuật chuyên sâu cho ___X___** tại Singapore (ưu tiên ngày 15/12/2025), có sự tham gia của ST Engineering để cùng thảo luận kiến trúc tham chiếu cho Việt Nam. 
+   * Dự kiến nội dung:
+
+     * Lab thực hành PubSub+ event mesh.
+     * Thiết kế luồng dữ liệu SWIM/FF-ICE mẫu (ví dụ luồng dữ liệu flight plan, trajectory updates, MET, AIXM/FIXM/IWXXM). ([iata.org][9])
+     * Bài tập use case cho ___X___ (CNS, bay kiểm tra, dịch vụ thông tin hàng không).
+
+---
+
+## IV. Hướng hợp tác trong chủ đề FF-ICE
+
+### 1. Bối cảnh và yêu cầu
+
+* FF-ICE đòi hỏi môi trường **dữ liệu hợp tác, chia sẻ quỹ đạo bay thời gian thực** giữa ANSP, hãng hàng không, sân bay và các bên liên quan. ([eurocontrol.int][7])
+* Để triển khai, cần:
+
+  * Mô hình **dịch vụ thông tin chuyến bay** theo chuẩn FIXM.
+  * Cơ chế **publish/subscribe flight data** theo sự kiện (file, amend, cancel, status, constraint…). ([icao.int][10])
+
+### 2. Vai trò Solace + ___X___
+
+___X___ hiện có thế mạnh trong **dịch vụ CNS, bay kiểm tra hiệu chuẩn và R&D hệ thống kỹ thuật hàng không**, là đơn vị phù hợp để phát triển/làm chủ các thành phần kỹ thuật cho FF-ICE trong VATM. 
+
+Hướng hợp tác đề xuất:
+
+1. **Xây dựng “FF-ICE Data Distribution Layer” trên nền tảng PubSub+**
+
+   * Solace cung cấp **event broker & event mesh** làm tầng phân phối sự kiện (flight plan, trajectory updates, regulations).
+   * ___X___ thiết kế và phát triển:
+
+     * Các **adapter** kết nối hệ thống kế hoạch bay hiện tại/AMHS/FDPS của VATM.
+     * Các **dịch vụ FF-ICE** (Flight Data Request, Trial Service, Subscription Service) theo hướng dẫn ICAO Doc 9965. ([icao.int][10])
+
+2. **Thí điểm “FF-ICE Lab”**
+
+   * Thiết lập **môi trường lab** tại ___X___:
+
+     * 01 broker/cluster Solace (on-prem hoặc cloud).
+     * 1–2 hệ thống giả lập: **airline client**, **network manager/ANSP client**.
+   * Mục tiêu:
+
+     * Test end-to-end **nộp, sửa, phân phối kế hoạch bay eFPL**.
+     * Mô phỏng kịch bản TBO đơn giản (thay đổi route/flight level dựa trên constraint).
+
+3. **Chuẩn bị cho lộ trình ICAO – Chấm dứt FPL 2012**
+
+   * Phối hợp Solace và ST Engineering xây dựng **roadmap kỹ thuật** cho VATM/___X___ đến mốc dừng FPL2012 (2034). ([icao.int][8])
+
+---
+
+## V. Hướng hợp tác trong chủ đề SWIM
+
+### 1. Bối cảnh
+
+* SWIM là nền tảng dùng chung cho **quản lý, chia sẻ thông tin ATM (aeronautical, flight, MET…)** dựa trên tiêu chuẩn và hạ tầng liên thông. ([icao.int][6])
+* ICAO/GANP coi SWIM là **trụ cột PIA 2: globally interoperable systems and data** – tiền đề cho FF-ICE và TBO.
+
+### 2. Hướng triển khai với Solace
+
+1. **Thiết kế kiến trúc SWIM Việt Nam dựa trên event mesh**
+
+   * Dùng PubSub+ làm **message backbone** kết nối:
+
+     * Hệ thống **CNS/ATM** tại trung tâm điều hành.
+     * Hệ thống **khí tượng hàng không**, **AIS/AIM**.
+     * Các sân bay chính, trung tâm bay kiểm tra, chi nhánh TPHCM… 
+   * Hình thành **SWIM Core Services**:
+
+     * Service Discovery, Security (authN/authZ), Monitoring.
+     * Chuẩn hóa topic taxonomy cho các domain: FLIGHT, MET, AERONAUTICAL, SURVEILLANCE…
+
+2. **Use case SWIM ưu tiên cho giai đoạn đầu**
+
+   * **Dịch vụ thông tin khí tượng (MET Service)**: phân phối TAF, METAR, SIGMET thời gian thực tới ANSP, airlines. ([iata.org][9])
+   * **Dịch vụ thông tin điều hướng (Navaids Service)**: thông tin trạng thái NAVAID, outage, NOTAM liên quan. ([iata.org][9])
+   * **Dịch vụ giám sát lưu lượng (Traffic Flow Info)**: phân phối dữ liệu flow/slot từ network manager đến tower/ACC/airlines.
+
+3. **Vai trò ___X___**
+
+   * ___X___ có các trung tâm kỹ thuật, huấn luyện, bay kiểm tra, thử nghiệm hiệu chuẩn, xưởng dịch vụ kỹ thuật… có thể vừa là **nhà phát triển dịch vụ SWIM**, vừa là **đơn vị vận hành, bảo trì hạ tầng** cho VATM. 
+
+---
+
+## VI. Hợp tác về AI trên nền event-driven cho ___X___
+
+Báo cáo nội bộ về ứng dụng AI tại ___X___ đã xác định rất nhiều cơ hội trong **dự báo thị trường, bảo trì dự đoán, kiểm tra chất lượng, tối ưu lộ trình bay, phân tích dữ liệu hiệu chuẩn…** 
+
+Solace bổ sung “mảnh ghép còn thiếu” là **luồng dữ liệu sự kiện thời gian thực**, cho phép AI hoạt động **online, real-time**, không chỉ phân tích offline.
+
+### 1. Các hướng kết hợp cụ thể
+
+1. **AI cho bảo trì dự đoán thiết bị CNS và máy bay bay kiểm tra**
+
+   * Dữ liệu telemetry, log thiết bị CNS, dữ liệu chuyến bay kiểm tra được publish liên tục lên event mesh.
+   * Mô hình AI (do ___X___ R&D xây dựng) subscribe dữ liệu, phát hiện bất thường và đưa ra **cảnh báo sớm** cho Trung tâm TSC/RSC, Trung tâm Bay kiểm tra.
+
+2. **Conversational/Agentic Assistants cho điều hành kỹ thuật**
+
+   * Dùng **event-triggered assistants**: khi xảy ra sự kiện bất thường (mất tín hiệu NAVAID, degradation của radar), hệ thống AI assistant tự động:
+
+     * Tập hợp log, chỉ thị kỹ thuật liên quan.
+     * Gợi ý quy trình xử lý chuẩn cho kỹ sư trực.
+
+3. **AI hỗ trợ phân tích dữ liệu bay kiểm tra & hiệu chuẩn**
+
+   * Dữ liệu chuyến bay kiểm tra (trajectory, signal strength, deviation…) được đẩy qua PubSub+ tới pipeline AI.
+   * Mô hình AI hỗ trợ:
+
+     * Phân loại mức độ lệch chuẩn.
+     * Đề xuất khu vực cần bay lại hoặc cần hiệu chỉnh thiết bị. 
+
+4. **AI cho hoạch định kinh doanh & tối ưu vận hành**
+
+   * Luồng dữ liệu SWIM/FF-ICE (lưu lượng, slot, delay, sự kiện thời tiết) kết hợp với AI dự báo tại **Phòng Kế hoạch kinh doanh**, giúp:
+
+     * Dự báo nhu cầu dịch vụ CNS, bay kiểm tra.
+     * Tối ưu lịch bay kiểm tra, bố trí nguồn lực kỹ thuật.
+
+---
+
+## VII. Đề xuất lộ trình hợp tác và bước tiếp theo
+
+### 1. Ngắn hạn (0–6 tháng)
+
+1. **Tổ chức workshop kỹ thuật với Solace & ST Engineering**
+
+   * Chốt lịch **15/12/2025** cho khóa đào tạo tại Singapore như đã thống nhất. 
+   * Nội dung tập trung:
+
+     * Kiến trúc event-driven, event mesh.
+     * Thực hành thiết kế topic, service SWIM mẫu.
+     * Giới thiệu các pattern tích hợp AI thời gian thực.
+
+2. **Khảo sát kiến trúc hiện trạng ___X___/VATM**
+
+   * R&D ___X___ phối hợp các trung tâm (CNS, bay kiểm tra, thử nghiệm hiệu chuẩn…) lập **bản đồ hệ thống & luồng dữ liệu hiện tại**, làm input cho Solace đề xuất kiến trúc.
+
+3. **Chọn 1–2 use case POC**
+
+   * Đề xuất:
+
+     * POC **dịch vụ MET/flight info nhỏ trên nền event mesh**.
+     * POC **AI cảnh báo sớm cho một nhóm thiết bị CNS**.
+
+### 2. Trung hạn (6–24 tháng)
+
+1. **Xây dựng SWIM Core trên môi trường hạn chế**
+
+   * Triển khai **SWIM sandbox** dùng Solace PubSub+ tại ___X___:
+
+     * Kết nối 1–2 hệ thống thật (ví dụ: MET, AIS).
+     * Chuẩn hóa API & topic theo hướng tương thích SWIM/FF-ICE.
+
+2. **Phát triển “FF-ICE Lab”**
+
+   * Cùng ST Engineering và Solace mô phỏng **chuỗi FF-ICE hoàn chỉnh** từ airline đến ANSP, gắn với các demo phục vụ ICAO APAC/CAAS khi cần.
+
+3. **Khung kiến trúc AI + Event Mesh cho ___X___**
+
+   * Hoàn thiện **reference architecture**: Solace Event Mesh + AI platform (on-prem hoặc cloud) + các ứng dụng của ___X___.
+   * Chuẩn hóa quy trình phát triển và triển khai AI dựa trên luồng sự kiện.
+
+### 3. Dài hạn (>24 tháng)
+
+* Hướng tới việc:
+
+  * Đề xuất ___X___ trở thành **đơn vị nòng cốt triển khai kỹ thuật SWIM/FF-ICE** cho VATM (phát triển, tích hợp, bảo trì hạ tầng).
+  * Mở rộng cung cấp **dịch vụ kỹ thuật SWIM/FF-ICE và giải pháp AI hàng không** cho đối tác trong khu vực, tận dụng chi nhánh TPHCM và kinh nghiệm hợp tác quốc tế hiện có.
+
+---
+
+Nếu bạn muốn, ở bước tiếp theo mình có thể giúp bạn:
+
+* Rút gọn báo cáo này thành **bản trình bày PowerPoint** cho lãnh đạo, hoặc
+* Viết **biên bản cuộc họp (MoM)** dạng bullet rõ ràng (Action, Owner, Deadline) dựa trên nội dung trên.
+
+[1]: https://www.solace.dev/?utm_source=chatgpt.com "Home | Solace - PubSub+ for Developers"
+[2]: https://solace.com/blog/solace-named-leader-idc-marketscape-event-brokering/?utm_source=chatgpt.com "Solace Named a Leader in the 2024 IDC MarketScape"
+[3]: https://solace.com/blog/solace-swim-air-traffic-management/?utm_source=chatgpt.com "How Solace Supports SWIM Air Traffic Management Systems"
+[4]: https://solace.com/solutions/initiative/event-mesh/?utm_source=chatgpt.com "Event Mesh | Solace"
+[5]: https://www.epicos.com/article/821999/solace-named-leader-2024-idc-marketscape-report-worldwide-event-brokering-software?utm_source=chatgpt.com "Solace Named a Leader in 2024 IDC MarketScape Report for Worldwide ..."
+[6]: https://www.icao.int/APAC/swim?utm_source=chatgpt.com "System Wide Information Management (SWIM)"
+[7]: https://www.eurocontrol.int/concept/flight-and-flow-information-collaborative-environment?utm_source=chatgpt.com "Flight and flow information for a collaborative environment"
+[8]: https://www.icao.int/sites/default/files/APAC/Meetings/2025/2025%20SWIM%20Seminar%20SWIM%20TF10%20and%20SIPG%20WS2/SWIM%20Seminar/1-Report/Report-of-SWIM-Seminar-2025.pdf?utm_source=chatgpt.com "REPORT OF - International Civil Aviation Organization (ICAO)"
+[9]: https://www.iata.org/contentassets/1be2bec28b3d45f9ae7780d6ebea7be9/webinar1-presentation-slides.pdf?utm_source=chatgpt.com "What is TBO,FF-ICE, and SWIM - IATA"
+[10]: https://www.icao.int/sites/default/files/APAC/Meetings/2025/2025%20FF-ICE%202%20and%20WS/Guidance%20Material/06-Flight-and-Flow-Information-for-a-Collaborative-Environment-FF-ICE-Services.pdf?utm_source=chatgpt.com "Workshop up Second ICE PAC FF A"
+
+**NAVAID** là viết tắt của **Navigational Aid** – tức **đài, thiết bị hoặc hệ thống hỗ trợ dẫn đường hàng không**. Đây là những trang thiết bị mặt đất hoặc vệ tinh giúp phi công xác định vị trí, hướng bay, độ cao và thực hiện tiếp cận/hạ cánh an toàn.
+
+Trong ngành CNS mà ___X___ đang cung cấp dịch vụ, NAVAID là một trong ba trụ cột quan trọng của “CNS” (**Communication – Navigation – Surveillance**). Việc theo dõi trạng thái NAVAID cũng được nhắc trong các báo cáo SWIM/Solace như một loại dịch vụ chia sẻ dữ liệu (NAVAID status, outage…) .
+
+---
+
+## **Các loại NAVAID phổ biến**
+
+### **1. VOR (VHF Omnidirectional Range)**
+
+Hệ thống phát tín hiệu định hướng 360°, giúp phi công xác định hướng tương đối đến trạm VOR.
+
+### **2. DME (Distance Measuring Equipment)**
+
+Thiết bị đo khoảng cách từ máy bay đến trạm mặt đất.
+
+### **3. NDB (Non-Directional Beacon)**
+
+Đài phát tín hiệu vô hướng để máy bay sử dụng ADF định vị tương đối.
+
+### **4. ILS (Instrument Landing System)**
+
+Hệ thống hỗ trợ hạ cánh chính xác, gồm:
+
+* **Localizer (LLZ)** – xác định hướng tiếp cận
+* **Glide Path/Slope (GP/GS)** – xác định góc hạ
+
+### **5. GNSS / SBAS / GBAS**
+
+Hệ thống vệ tinh định vị toàn cầu và các dịch vụ tăng cường hỗ trợ dẫn đường chính xác.
+
+---
+
+## **NAVAID liên quan gì đến SWIM và Solace?**
+
+Trong các buổi làm việc với Solace, NAVAID xuất hiện ở nhóm **SWIM Services** dự kiến có thể triển khai cho ___X___, ví dụ:
+
+* **Navaids Service**: chia sẻ **trạng thái thiết bị NAVAID**, outage, bảo trì… theo thời gian thực qua nền tảng event-driven SWIM.
+* Dữ liệu này là một phần quan trọng trong **ATFM**, **FF-ICE** và điều hành bay, giúp airlines/ANSP nhận biết rủi ro điều hướng.
+
+Trích dẫn: trong báo cáo Solace, nhóm dịch vụ SWIM ưu tiên có **"Navaids Service – thông tin trạng thái NAVAID, outage, NOTAM liên quan"** .
+
+---
+
+## **Tóm lại**
+
+**NAVAID = thiết bị/dịch vụ hỗ trợ dẫn đường hàng không**, bao gồm VOR, DME, NDB, ILS, GNSS…
+Trong dự án FF-ICE/SWIM, việc chuẩn hóa và chia sẻ dữ liệu NAVAID là một trong những dịch vụ quan trọng mà ___X___ có thể tham gia phát triển hoặc vận hành.
+
+---
+
+Nếu bạn muốn, mình có thể giải thích thêm:
+
+* Vai trò của từng NAVAID trong bay kiểm tra ___X___
+* Cách mô tả trạng thái NAVAID đưa vào SWIM topic taxonomy
+* Cách ___X___ có thể xây dựng **NAVAID SWIM Service** trên Solace event mesh.
+
+
+**NextGen** (tên đầy đủ: **Next Generation Air Transportation System**) là **chương trình hiện đại hóa toàn diện hệ thống quản lý không lưu (ATM)** của Hoa Kỳ, do **FAA** triển khai từ giữa những năm 2000 và vẫn đang tiếp tục phát triển.
+
+Đây là một trong những chương trình ATM lớn nhất thế giới, đặt mục tiêu **chuyển đổi từ quản lý bay dựa trên radar truyền thống → sang hệ thống dựa trên quỹ đạo, dữ liệu số và vệ tinh**.
+
+Trong tài liệu Solace mà ___X___ nhận được, câu *“FAA SWIM – hạ tầng phân phối dữ liệu thời gian thực cho NextGen”* xuất hiện nhiều lần vì **SWIM chính là nền tảng dữ liệu trục xương sống (data backbone)** của NextGen. 
+
+---
+
+## **1. NextGen là gì? (Định nghĩa ngắn gọn)**
+
+NextGen là **hệ thống quản lý không lưu thế hệ mới của Mỹ**, bao gồm hàng loạt chương trình công nghệ để nâng cao:
+
+* Năng lực thông qua (capacity)
+* Hiệu quả bay
+* An toàn
+* Giảm trễ, giảm nhiên liệu
+* Tự động hóa và chia sẻ thông tin
+
+FAA mô tả NextGen là sự chuyển đổi **“from ground-based to satellite-based operations.”**
+
+---
+
+## **2. Các thành phần chính của NextGen**
+
+### **(1) ADS-B – Automatic Dependent Surveillance–Broadcast**
+
+Thay thế giám sát radar bằng giám sát vệ tinh chính xác cao.
+
+### **(2) SWIM – System Wide Information Management**
+
+Trục tích hợp và phân phối dữ liệu thời gian thực cho toàn hệ thống: flight, MET, AIM, ATFM…
+→ Đây chính là phần Solace cung cấp hạ tầng event distribution.
+
+### **(3) TBO – Trajectory-Based Operations**
+
+Điều hành bay dựa trên **quỹ đạo 4D** (thời gian + không gian).
+FF-ICE sau này của ICAO cũng là một phần của triết lý TBO toàn cầu.
+
+### **(4) DataComm – Data Communications**
+
+Thay thế một phần liên lạc thoại giữa phi công và kiểm soát viên bằng dữ liệu số.
+
+### **(5) PBN – Performance-Based Navigation**
+
+Điều hướng bay hiện đại bằng GNSS, RNAV, RNP.
+
+---
+
+## **3. Tại sao Solace xuất hiện trong NextGen?**
+
+Trong hợp tác với FAA, Solace cung cấp **hệ thống phân phối sự kiện (event broker/event mesh)** phục vụ:
+
+* Chuyển dữ liệu giám sát
+* Dữ liệu khí tượng
+* Thông tin chuyến bay
+* Dữ liệu ATFM
+* Các dịch vụ SWIM khác
+
+Vì vậy trong báo cáo có câu:
+
+> **“FAA SWIM – hạ tầng phân phối dữ liệu thời gian thực cho NextGen.”** 
+
+→ Ý nghĩa: **FAA dùng SWIM (với Solace làm nền tảng) để kết nối và chia sẻ mọi loại dữ liệu cho toàn bộ NextGen.**
+
+---
+
+## **4. Ý nghĩa của NextGen đối với ___X___ / Việt Nam**
+
+NextGen được xem là “hình mẫu ban đầu” để ICAO phát triển **SWIM, FF-ICE, TBO toàn cầu**.
+___X___ nghiên cứu NextGen sẽ giúp:
+
+* Hiểu **kiến trúc SWIM** ở cấp độ quốc gia
+* Xây dựng chiến lược FF-ICE/TBO
+* Định hướng phát triển SWIM Việt Nam
+* Phối hợp CAAS, Solace, ST Engineering theo chuẩn quốc tế
+
+Đặc biệt, FAA SWIM là một trong những triển khai event-driven lớn nhất thế giới – phù hợp với hướng ___X___ đang hợp tác với Solace.
+
+---
+
+Nếu bạn muốn, mình có thể tạo **một bản tóm tắt “NextGen cho người mới”**, hoặc **so sánh NextGen (FAA) với SWIM/FF-ICE (ICAO)** để đưa vào báo cáo công tác.
+
+Báo cáo làm việc với CAAS về FF-ICE và SWIM
+(Singapore, Tue 2 Dec 2025)
+
+---
+
+## I. Thông tin chung buổi làm việc
+
+* **Thời gian**: Thứ Ba, 02/12/2025
+
+* **Địa điểm**: Trụ sở CAAS – Changi Airport
+
+* **Thành phần chính (tóm tắt)**:
+
+  * Phía **CAAS**: NextGen Programme Office, nhóm phụ trách FF-ICE/R1 và SWIM.
+  * Phía **___X___**: Đại diện Ban lãnh đạo, Phòng Nghiên cứu Phát triển và các bộ phận liên quan tới hệ thống kế hoạch bay, ATFM, SWIM.
+
+* **Mục tiêu buổi làm việc**:
+
+  1. Nghe CAAS chia sẻ kinh nghiệm triển khai **FF-ICE/R1** và **SWIM** trong khuôn khổ chương trình NextGen.
+  2. Tìm hiểu khả năng **hợp tác kỹ thuật** giữa CAAS và ___X___, hướng tới lộ trình áp dụng FF-ICE, SWIM cho Việt Nam.
+  3. Trao đổi nhu cầu chia sẻ tài liệu (slides SWIM, mapping ASTERIX Cat 21 → JSON) để ___X___ nghiên cứu, thiết kế giải pháp phù hợp.
+
+---
+
+## II. Tóm tắt nội dung CAAS trình bày
+
+### 1. Tổng quan FF-ICE/R1 và thay thế FPL2012
+
+CAAS trình bày lại khái niệm **Flight and Flow Information for a Collaborative Environment (FF-ICE)**:
+
+* FF-ICE được ICAO xây dựng để **thay thế FPL 2012** với mục tiêu khắc phục các hạn chế về định dạng và trao đổi thông tin của kế hoạch bay hiện tại.
+* **FF-ICE/R1 – giai đoạn trước khởi hành (pre-departure)**, tập trung vào:
+
+  * Mở rộng trường dữ liệu (trajectory-based, ràng buộc ATFM, dữ liệu bổ sung tại từng điểm quỹ đạo).
+  * Cơ chế **feedback, thương lượng quỹ đạo** giữa hãng bay (eAU) và cơ quan cung cấp dịch vụ (eASP).
+  * Trao đổi dữ liệu trên nền tảng **SWIM**, với các mô hình dữ liệu chuẩn như **FIXM, AIXM, IWXXM**.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][1])
+
+CAAS lưu ý mốc **“Global FPL2012 sunset 2034”**, do đó các nhà cung cấp dịch vụ không lưu (ANSP) trong khu vực cần chủ động chuẩn bị từ nay đến 2030 để sẵn sàng cho FF-ICE.
+
+### 2. Lộ trình triển khai FF-ICE/R1 của CAAS
+
+Theo tài liệu CAAS chia sẻ và các báo cáo tại ICAO APAC: ([Tổ Chức Hàng Không Dân Dụng Quốc Tế][1])
+
+* **2028**:
+
+  * Triển khai **hai dịch vụ bắt buộc của FF-ICE/R1** (Filing Service, Flight Data Request Service) thông qua nâng cấp hệ thống hiện có.
+* **2030**:
+
+  * Hoàn thiện **tất cả 6 dịch vụ FF-ICE/R1**, tích hợp trong một hệ thống mới bao gồm: FF-ICE/R1, ATFM và AIMS (Aeronautical Information Management System).
+* Trọng tâm hiện tại:
+
+  * **Vận hành “mixed-mode”**: đồng thời xử lý **FPL2012 và eFPL** (FF-ICE) trong giai đoạn quá độ.
+  * Xây dựng quy trình, yêu cầu hệ thống cho:
+
+    * Tiếp nhận, đánh giá, phản hồi kế hoạch bay ở cả 2 định dạng.
+    * Tích hợp với **ATFMS, AIMS, SWIM** và các hệ thống liên quan.
+
+### 3. Hoạt động ICAO APAC FF-ICE Ad-hoc Group & Regional Framework
+
+CAAS – cùng Singapore – đang đóng vai trò tích cực trong **APAC FF-ICE Ad-hoc Group** của ICAO: ([Tổ Chức Hàng Không Dân Dụng Quốc Tế][2])
+
+* Nhóm được thành lập 2023 để:
+
+  * Xử lý thách thức khu vực khi chuyển đổi từ FPL2012 sang FF-ICE.
+  * Xây dựng **“Regional FF-ICE Implementation Framework”** cho khu vực APAC.
+* Các mốc chính:
+
+  * **Workshop 1 (Jun 2024)**: Tabletop exercise về mixed-mode, message exchange.
+  * **Workshop 2 (Mar 2025)**: Hoàn thiện khung hướng dẫn khu vực, bao gồm:
+
+    * Mô hình trao đổi thông tin (Information Exchange Models).
+    * Quản lý **GUFI**, mixed-mode, translation giữa FPL2012 và FF-ICE.
+    * Trách nhiệm eASP/eAU, an ninh mạng, quy trình đánh giá/feedback, giám sát triển khai.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][3])
+  * **Workshop 3 (Dec 2025)**: Dự kiến rà soát kế hoạch triển khai khu vực để trình ATM/SG 2026.
+
+CAAS nhấn mạnh đây là **cơ hội để các ANSP/đơn vị kỹ thuật như ___X___ tham gia sớm**, nắm bắt định hướng khu vực và chuẩn hóa triển khai.
+
+### 4. Chia sẻ về triển khai SWIM và SWIM–CRV của CAAS
+
+CAAS trình bày vai trò **SWIM là nền tảng bắt buộc** để FF-ICE vận hành hiệu quả:
+
+* SWIM cho phép **chia sẻ thông tin toàn cục**, theo chuẩn ICAO, giữa:
+
+  * ANSP, hãng hàng không, sân bay, MET, quốc phòng…
+* CAAS đồng thời tham gia **SWIM Task Force của ICAO APAC**, nơi đang xây dựng yêu cầu tối thiểu về năng lực SWIM phục vụ FF-ICE.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][4])
+
+Về triển khai kỹ thuật, CAAS giới thiệu **use-case SWIM – CRV – Cloud Platform**:([Tổ Chức Hàng Không Dân Dụng Quốc Tế][5])
+
+* Sử dụng **CRV (Common Aeronautical VPN)** để kết nối:
+
+  * **Government Commercial Cloud** ↔ **Commercial Cloud**,
+  * Cho phép dữ liệu trên nền tảng cloud trao đổi qua CRV **mà không đi qua hạ tầng on-premises** truyền thống của CAAS.
+* Định hướng bảo mật theo **ICAO Aviation Common Certificate Policy (ACCP)** và Trust Framework cho môi trường SWIM.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][6])
+
+### 5. Trao đổi về tài liệu kỹ thuật và dữ liệu giám sát
+
+Trong thư trao đổi, CAAS đã:
+
+* Gửi ___X___ **slides về CAAS SWIM**.
+* Ghi nhận đề nghị của ___X___ về **tài liệu mapping ASTERIX Cat 21 → JSON** và giao đầu mối Elvin Liow, Jackson Ho hỗ trợ cung cấp.
+
+Đây là cơ sở quan trọng để ___X___:
+
+* Xây dựng **dịch vụ SWIM cho dữ liệu giám sát** (Surveillance Data Service).
+* Thiết kế kiến trúc publish/subscribe qua **event-mesh** (khi kết hợp thêm với Solace trong các buổi làm việc khác).
+
+---
+
+## III. Nội dung thảo luận & định hướng hợp tác sơ bộ
+
+### 1. Mức độ quan tâm và nhu cầu của ___X___
+
+Từ phía ___X___, các nhu cầu chính được nhấn mạnh:
+
+1. **Nắm vững kiến trúc và luồng trao đổi FF-ICE/R1** để:
+
+   * Tư vấn cho VATM/Cục Hàng không trong các dự án nâng cấp kế hoạch bay.
+   * Thiết kế/triển khai các module **gateway và chuyển đổi FPL2012 ↔ eFPL**.
+2. **Xây dựng năng lực SWIM nội bộ**:
+
+   * Thiết kế **SWIM Node**/SWIM Gateway tại Việt Nam.
+   * Chuẩn bị kết nối tương lai với **APAC SWIM/CRV**, trong đó CAAS là một nút quan trọng.
+3. Tận dụng **kinh nghiệm triển khai thực tế** của CAAS (trials, mixed-mode operations, integration với ATFM/AIMS) để giảm rủi ro cho các dự án của ___X___.
+
+### 2. Các ý tưởng hợp tác sơ bộ được đề cập
+
+* **Chia sẻ tài liệu và workshop chuyên sâu**:
+
+  * CAAS cung cấp thêm tài liệu kỹ thuật, đặc biệt về:
+
+    * Luồng message và service cho 6 FF-ICE/R1 services.
+    * Cấu trúc eFPL (FIXM), quy tắc validation.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][1])
+    * Thiết kế kiến trúc SWIM, SWIM-CRV-Cloud.
+  * Tổ chức **các buổi kỹ thuật chuyên đề** (online/onsite) dành riêng cho ___X___.
+* **Thử nghiệm song phương (bilateral trials)**:
+
+  * Dựa trên kinh nghiệm CAAS đã làm **bilateral FF-ICE message exchange** với AEROTHAI và trong Multi-Regional TBO Lab.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][1])
+  * Mở rộng mô hình này sang **___X___/VATM – CAAS**, trước tiên ở mức phòng thí nghiệm.
+* **Phối hợp trong các diễn đàn/nhóm công tác ICAO APAC**:
+
+  * CAAS đề nghị ___X___ (thông qua VATM/Cục HKVN) **tham gia sâu hơn** vào:
+
+    * APAC FF-ICE Ad-hoc Group.
+    * SWIM Task Force, SIPG working sessions.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][7])
+
+---
+
+## IV. Đề xuất hướng hợp tác cụ thể cho ___X___
+
+Dưới đây là đề xuất mang tính **hành động**, gắn với năng lực hiện tại của ___X___.
+
+### 1. Hợp tác về FF-ICE/R1
+
+#### 1.1. Giai đoạn 2025–2027: Học hỏi & xây nền tảng
+
+* **Thiết lập Nhóm FF-ICE/SWIM nội bộ ___X___** (gồm R&D, CNS, Bay kiểm tra, Kỹ thuật chất lượng).
+* Đề nghị CAAS:
+
+  * Tổ chức **01–02 buổi workshop kỹ thuật** tập trung vào:
+
+    * Kiến trúc hệ thống FF-ICE của CAAS.
+    * Quy trình xử lý **Submission Response, Filing Status, Trial Response** (ACK, REJ, MAN, PENDING, ACCEPTABLE, NEGOTIATE...).
+* ___X___ phát triển **mô hình PoC nhỏ**:
+
+  * Module đọc/ghi **eFPL (FIXM)**.
+  * Module chuyển đổi **FPL2012 ↔ eFPL** theo một số use-case đơn giản (nhận từ hãng bay, chuyển cho ANSP).
+
+#### 1.2. Giai đoạn 2028–2030: Thử nghiệm song phương và sản phẩm
+
+* Cùng CAAS xây dựng **kịch bản thử nghiệm song phương**:
+
+  * ___X___/VATM đóng vai trò **eASP/eAU** trong một số luồng.
+  * Trao đổi **FF-ICE messages** thông qua SWIM/CRV hoặc VPN lab.
+* Phát triển **sản phẩm/gói giải pháp**:
+
+  * **FF-ICE Gateway** cho VATM/Cục HKVN (tích hợp với hệ thống kế hoạch bay hiện tại).
+  * Bộ **công cụ kiểm thử, đánh giá eFPL** dựa trên kinh nghiệm từ CAAS và hướng dẫn ICAO.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][3])
+
+#### 1.3. Trung – dài hạn sau 2030: Hội nhập khu vực
+
+* Cùng CAAS và các ANSP khác trong khu vực:
+
+  * Tham gia **FF-ICE Implementation Task Force** (khi ICAO chính thức thành lập).([Tổ Chức Hàng Không Dân Dụng Quốc Tế][8])
+  * Đồng bộ lộ trình “sunset FPL2012” của Việt Nam với kế hoạch khu vực.
+* ___X___ có thể đóng vai trò:
+
+  * **Nhà tích hợp hệ thống và tư vấn kỹ thuật** cho các dự án FF-ICE tại Việt Nam và một số nước lân cận.
+
+### 2. Hợp tác về SWIM
+
+#### 2.1. Thiết kế SWIM Node/Platform thí điểm
+
+* Phối hợp với CAAS:
+
+  * Tham khảo kiến trúc **SWIM – CRV – Cloud Platform** của CAAS để xây dựng:
+
+    * Mô hình **SWIM Node thí điểm** tại ___X___.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][5])
+* Tận dụng hợp tác với **Solace**:
+
+  * Dùng **event-mesh** của Solace làm lớp **event distribution layer** trong SWIM Node:
+
+    * Các dịch vụ: FF-ICE services, surveillance data (Cat 21 JSON), MET, ATFM events…
+
+#### 2.2. Chuẩn hóa dịch vụ dữ liệu giám sát (Surveillance SWIM Service)
+
+* Sử dụng **mapping ASTERIX Cat 21 → JSON** do CAAS cung cấp:
+
+  * Thiết kế **Surveillance Data Service** chuẩn SWIM, có thể:
+
+    * Cung cấp cho VATM, sân bay, hãng bay trong nước.
+    * Mở rộng chia sẻ với khu vực qua CRV khi cần.
+* ___X___ có thể đóng góp:
+
+  * Năng lực tích hợp, xử lý dữ liệu giám sát từ các trạm radar/ADS-B tại Việt Nam.
+
+#### 2.3. An ninh & Trust Framework
+
+* Học hỏi CAAS và ICAO về:
+
+  * Ứng dụng **Aviation Common Certificate Policy (ACCP)**, **Trust Framework** cho SWIM.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][6])
+* Đề xuất:
+
+  * ___X___ phối hợp với CAAS nghiên cứu **PKI, chứng thư số, cơ chế cấp phát/quản lý khóa** cho SWIM Node trong nước, tương thích khu vực.
+
+---
+
+## V. Đề xuất kế hoạch hành động nội bộ cho ___X___
+
+### 1. Ngắn hạn (Q1–Q2/2026)
+
+1. **Rà soát tài liệu** đã nhận từ CAAS (slides SWIM, FF-ICE) và các tài liệu ICAO APAC liên quan FF-ICE/SWIM. ([Tổ Chức Hàng Không Dân Dụng Quốc Tế][2])
+2. **Thành lập Nhóm công tác FF-ICE/SWIM**:
+
+   * Nòng cốt từ Phòng Nghiên cứu Phát triển, Kỹ thuật chất lượng, Trung tâm Huấn luyện CNS.
+3. Chuẩn bị **note chính sách** gửi VATM/Cục HKVN:
+
+   * Kiến nghị Việt Nam sớm bám sát **APAC Regional FF-ICE Implementation Framework** và các hoạt động workshop khu vực.([Tổ Chức Hàng Không Dân Dụng Quốc Tế][3])
+
+### 2. Trung hạn (2026–2028)
+
+1. **Xây dựng PoC nội bộ**:
+
+   * FF-ICE Gateway (FPL2012 ↔ eFPL).
+   * SWIM Node nhỏ trên nền tảng cloud (có thể thử nghiệm kết hợp Solace event-mesh).
+2. Tham gia:
+
+   * Các **Workshop/Task Force** của ICAO APAC về FF-ICE và SWIM (qua đầu mối CAAS giới thiệu).([Tổ Chức Hàng Không Dân Dụng Quốc Tế][7])
+
+### 3. Dài hạn
+
+* Hướng tới:
+
+  * ___X___ trở thành **đối tác kỹ thuật khu vực** trong mảng FF-ICE/SWIM, dựa trên kinh nghiệm tích lũy cùng CAAS, Solace và các dự án trong nước.
+  * Tích hợp sâu **AI và phân tích dữ liệu** vào:
+
+    * Dự báo tải không lưu trên nền eFPL.
+    * Phân tích chất lượng dữ liệu SWIM, giám sát an toàn khai thác.
+
+---
+
+Nếu bạn muốn, ở bước tiếp theo mình có thể giúp **chuyển báo cáo này thành bản trình bày PowerPoint** (có slide riêng cho: bối cảnh, nội dung CAAS, cơ hội hợp tác, lộ trình hành động ___X___) để anh/chị dùng trong báo cáo công tác về cho lãnh đạo.
+
+[1]: https://www.icao.int/sites/default/files/APAC/Meetings/2024/2024%20FF-ICE%20%26%20WS%20with%20TTX/5-Presentations/CAAS-Plans-for-FF-ICE_R1-Services.pdf?utm_source=chatgpt.com "Plans for FF-ICE/R1 Services - International Civil Aviation ..."
+[2]: https://www.icao.int/sites/default/files/APAC/Meetings/2024/2024%20ATMSG-12/3-Working%20Papers/WP16-Progress-update-of-the-ICAO-Asia-Pacific-FF-ICE-ad-hoc-group.pdf?utm_source=chatgpt.com "Agenda Item 5: - International Civil Aviation Organization (ICAO)"
+[3]: https://www.icao.int/sites/default/files/APAC/Meetings/2025/2025%20FF-ICE%202%20and%20WS/Guidance%20Material/01-Regional-FF-ICE-Implementation-Framework.pdf?utm_source=chatgpt.com "Regional FF-ICE Implementation Framework"
+[4]: https://www.icao.int/sites/default/files/APAC/Meetings/2025/2025%20SWIM%20Seminar%20SWIM%20TF10%20and%20SIPG%20WS2/SWIM%20Seminar/2-General%20Information/SWIM-Seminar-2025-Programme.pdf?utm_source=chatgpt.com "Establishing SWIM – A Key Enabler for FF-ICE"
+[5]: https://www.icao.int/sites/default/files/APAC/Meetings/2025/2025%20CRV%20OG-13/CRV%20OG-13/5-Presentations/SP03_SGP-AI.9-CAAS-SWIM-CRV-use-case_final.pdf?utm_source=chatgpt.com "1SP/03 to CRV OG/13 - International Civil Aviation Organization (ICAO)"
+[6]: https://www.icao.int/sites/default/files/APAC/Meetings/2025/2025%201st%20Working%20Session%20SWIMSIPG/1-Report/Report-of-first-SIPG-Working-Session.pdf?utm_source=chatgpt.com "INTERNATIONAL CIVIL AVIATION ORGANIZATION"
+[7]: https://www.icao.int/APAC/meetings?utm_source=chatgpt.com "Meetings - International Civil Aviation Organization (ICAO)"
+[8]: https://www.icao.int/sites/default/files/APAC/Meetings/2025/2025%20FF-ICE%202%20and%20WS/Guidance%20Material/05-Introduction-and-background.pdf?utm_source=chatgpt.com "Introduction and Background - International Civil Aviation Organization ..."
+
+
