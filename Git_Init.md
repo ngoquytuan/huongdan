@@ -251,6 +251,562 @@ cat .git/config
 
 Bạn có muốn tôi giải thích sâu hơn về cấu trúc bên trong `.git/objects/` (cách Git lưu trữ commits và files) không?
 
+---
+
+Bạn đúng! Tôi bổ sung chi tiết về **Git Commit** và **Xử lý lỗi thường gặp**.
+
+---
+
+## **FIX LỖI CỦA BẠN NGAY**
+
+```bash
+# Lỗi: Git không tin tưởng thư mục này (thường trên Windows)
+# Fix:
+git config --global --add safe.directory D:/Projects/MikroTik
+
+# Sau đó commit lại:
+git commit -m "add init files"
+```
+
+**Tại sao có lỗi này?**
+- Windows file system không lưu ownership như Linux
+- Git nghĩ có nguy cơ bảo mật → từ chối
+- Fix: Báo Git "tin tưởng" thư mục này
+
+---
+
+# **Chi Tiết: Git Commit - Từ A đến Z**
+
+## **1. Workflow Cơ Bản**
+
+```bash
+# Bước 1: Kiểm tra status
+git status
+
+# Bước 2: Add files vào staging area
+git add <files>
+
+# Bước 3: Commit
+git commit -m "message"
+
+# Bước 4: Push lên remote (nếu có)
+git push
+```
+
+---
+
+## **2. Git Add - Thêm Files Vào Staging**
+
+### **Các Cách Add**
+
+```bash
+# Add 1 file cụ thể
+git add main.c
+
+# Add nhiều files
+git add main.c gps.c config.h
+
+# Add tất cả files trong thư mục
+git add src/
+
+# Add TẤT CẢ files đã thay đổi (tracked files)
+git add -u
+
+# Add TẤT CẢ (bao gồm untracked files)
+git add .
+git add -A
+git add --all
+
+# Add interactive (chọn từng thay đổi)
+git add -p
+# Git hỏi từng hunk: Stage this hunk [y,n,q,a,d,e,?]?
+```
+
+### **So Sánh `git add` Options**
+
+| Command | Tracked Files | Untracked Files | Deleted Files |
+|---------|--------------|-----------------|---------------|
+| `git add .` | ✅ Add | ✅ Add | ✅ Add |
+| `git add -A` | ✅ Add | ✅ Add | ✅ Add |
+| `git add -u` | ✅ Add | ❌ Không add | ✅ Add |
+| `git add <file>` | ✅ Add | ✅ Add | ❌ |
+
+**Use Case:**
+```bash
+# Scenario: Có 5 files mới, 3 files sửa, 2 files xóa
+
+git add -A        # Add TẤT CẢ (10 files)
+git add -u        # Add 3 sửa + 2 xóa (bỏ qua 5 files mới)
+git add src/      # Add tất cả trong src/ folder
+```
+
+---
+
+## **3. Git Commit - Các Tham Số Chi Tiết**
+
+### **Commit Cơ Bản**
+
+```bash
+# Commit với message ngắn
+git commit -m "feat: add GPS module"
+
+# Commit với message dài (mở editor)
+git commit
+# Editor mở, gõ message nhiều dòng
+
+# Commit TẤT CẢ tracked files (bỏ qua git add)
+git commit -a -m "fix: resolve UART timeout"
+# = git add -u + git commit -m
+
+# Commit và add (CHỈ tracked files)
+git commit -am "update GPS parsing"
+```
+
+### **Commit Message Multi-line**
+
+```bash
+# Cách 1: Dùng editor
+git commit
+# Editor mở:
+# feat: add GPS coordinate parsing
+#
+# - Support NMEA format
+# - Add validation for lat/lon
+# - Handle edge cases
+
+# Cách 2: Command line (Windows)
+git commit -m "feat: add GPS parsing" -m "Support NMEA format" -m "Add validation"
+
+# Cách 3: Heredoc (Linux/Mac)
+git commit -m "$(cat <<EOF
+feat: add GPS parsing
+
+- Support NMEA format  
+- Add validation
+- Handle edge cases
+EOF
+)"
+```
+
+### **Commit Advanced Options**
+
+```bash
+# Sửa commit cuối cùng (chưa push)
+git commit --amend -m "fix: correct GPS timeout to 1000ms"
+
+# Thêm file vào commit cuối (quên add)
+git add forgotten_file.c
+git commit --amend --no-edit
+# --no-edit: giữ nguyên commit message
+
+# Commit với author khác
+git commit -m "feat: GPS" --author="John Doe <john@example.com>"
+
+# Commit với date cụ thể
+git commit -m "feat: GPS" --date="2024-01-15 10:00:00"
+
+# Commit empty (không có thay đổi)
+git commit --allow-empty -m "trigger CI/CD"
+
+# Commit với GPG signature
+git commit -S -m "feat: secure commit"
+```
+
+### **Commit Message Best Practices**
+
+```bash
+# ❌ BAD
+git commit -m "update"
+git commit -m "fix bug"
+git commit -m "asdf"
+git commit -m "changes"
+
+# ✅ GOOD
+git commit -m "feat: add GPS coordinate parsing function"
+git commit -m "fix: resolve UART timeout after 30 seconds"
+git commit -m "docs: update README with setup instructions"
+git commit -m "refactor: simplify GPS data validation logic"
+git commit -m "test: add unit tests for GPS parsing"
+```
+
+**Format chuẩn (Conventional Commits):**
+```
+<type>: <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:**
+- `feat`: Tính năng mới
+- `fix`: Sửa bug
+- `docs`: Documentation
+- `style`: Format code (không thay đổi logic)
+- `refactor`: Refactor code
+- `test`: Thêm tests
+- `chore`: Maintenance (update dependencies, ...)
+
+**Ví dụ đầy đủ:**
+```bash
+git commit -m "feat: implement GPS coordinate parsing
+
+- Add support for NMEA 0183 format
+- Validate latitude/longitude ranges
+- Handle UTC timestamp conversion
+
+Closes #123"
+```
+
+---
+
+## **4. Xem Commits**
+
+```bash
+# Xem lịch sử commits
+git log
+
+# Xem compact (1 dòng/commit)
+git log --oneline
+
+# Xem graph (branches)
+git log --oneline --graph --all
+
+# Xem với diff
+git log -p
+
+# Xem 5 commits gần nhất
+git log -5
+
+# Xem commits theo author
+git log --author="Tuan"
+
+# Xem commits theo date
+git log --since="2024-01-01"
+git log --until="2024-12-31"
+
+# Xem commits có chứa text
+git log -S "gps_parse"
+
+# Xem commits của 1 file
+git log -- gps.c
+
+# Xem commit cụ thể
+git show abc1234
+```
+
+---
+
+## **5. Staging Area - Hiểu Rõ Cơ Chế**
+
+```
+Working Directory → Staging Area → Repository
+     (code)            (index)       (.git)
+
+                git add →
+                        ← git restore
+                                git commit →
+```
+
+**Ví dụ:**
+```bash
+# Bước 1: Sửa file
+echo "GPS v1" > gps.c
+git status
+# Changes not staged for commit:
+#   modified:   gps.c
+
+# Bước 2: Add vào staging
+git add gps.c
+git status
+# Changes to be committed:
+#   modified:   gps.c
+
+# Bước 3: Sửa tiếp file (sau khi add)
+echo "GPS v2" >> gps.c
+git status
+# Changes to be committed:
+#   modified:   gps.c      ← Version v1 (staged)
+# Changes not staged for commit:
+#   modified:   gps.c      ← Version v2 (working)
+
+# Commit chỉ lấy version v1 (staged)
+git commit -m "update GPS"
+# gps.c trong commit = "GPS v1"
+# gps.c trong working dir = "GPS v1\nGPS v2"
+```
+
+---
+
+## **6. Undo Staging**
+
+```bash
+# Unstage file (bỏ ra khỏi staging)
+git restore --staged gps.c
+# Hoặc (cách cũ):
+git reset HEAD gps.c
+
+# Unstage tất cả
+git restore --staged .
+git reset HEAD .
+
+# Discard working changes (nguy hiểm!)
+git restore gps.c
+# Hoặc:
+git checkout -- gps.c
+```
+
+---
+
+## **7. LỖI THƯỜNG GẶP & CÁCH FIX**
+
+### **Lỗi 1: Dubious Ownership (của bạn)**
+```bash
+fatal: detected dubious ownership in repository at 'D:/Projects/MikroTik'
+
+# Fix:
+git config --global --add safe.directory D:/Projects/MikroTik
+
+# Hoặc trust tất cả (không khuyến khích):
+git config --global --add safe.directory '*'
+```
+
+### **Lỗi 2: Nothing to Commit**
+```bash
+git commit -m "update"
+# On branch main
+# nothing to commit, working tree clean
+
+# Nguyên nhân: Quên git add
+# Fix:
+git add .
+git commit -m "update"
+```
+
+### **Lỗi 3: Please Tell Me Who You Are**
+```bash
+git commit -m "test"
+# fatal: unable to auto-detect email address
+
+# Fix: Config user
+git config --global user.name "Tuan Nguyen"
+git config --global user.email "tuan@example.com"
+
+# Hoặc chỉ cho repo này:
+git config user.name "Tuan"
+git config user.email "tuan@example.com"
+```
+
+### **Lỗi 4: LF Will Be Replaced by CRLF**
+```bash
+warning: LF will be replaced by CRLF in main.c
+
+# Giải thích: Windows dùng CRLF, Linux dùng LF
+# Fix (Windows):
+git config --global core.autocrlf true
+
+# Fix (Linux/Mac):
+git config --global core.autocrlf input
+```
+
+### **Lỗi 5: Cannot Commit (Files in .gitignore)**
+```bash
+# Thêm file vào .gitignore rồi mới add
+git add build/output.hex
+# The following paths are ignored by one of your .gitignore files
+
+# Fix: Force add
+git add -f build/output.hex
+
+# Hoặc: Bỏ khỏi .gitignore
+```
+
+### **Lỗi 6: Commit Sai Branch**
+```bash
+# Đang ở main, commit nhầm
+git add .
+git commit -m "new feature"
+# Ối, phải commit vào feature branch!
+
+# Fix: Chuyển commit sang branch khác
+git branch feature/my-work    # Tạo branch tại commit này
+git reset --hard HEAD~1       # Xóa commit ở main
+git checkout feature/my-work  # Switch sang branch mới
+```
+
+### **Lỗi 7: Commit Message Sai**
+```bash
+git commit -m "updat"  # Typo!
+
+# Fix: Sửa commit cuối
+git commit --amend -m "update GPS parsing"
+```
+
+### **Lỗi 8: Quên Add File Vào Commit**
+```bash
+git commit -m "add GPS module"
+# Quên add gps.h!
+
+# Fix:
+git add gps.h
+git commit --amend --no-edit
+# Thêm gps.h vào commit cuối
+```
+
+### **Lỗi 9: File Quá Lớn**
+```bash
+git add firmware.bin  # 500MB
+git commit -m "add firmware"
+# warning: adding embedded git repository
+
+# Fix: Dùng Git LFS
+git lfs install
+git lfs track "*.bin"
+git add .gitattributes
+git add firmware.bin
+git commit -m "add firmware with LFS"
+```
+
+### **Lỗi 10: Permission Denied (SSH)**
+```bash
+git push origin main
+# Permission denied (publickey)
+
+# Fix: Setup SSH key
+ssh-keygen -t ed25519 -C "tuan@example.com"
+cat ~/.ssh/id_ed25519.pub
+# Copy key, paste vào GitHub Settings → SSH Keys
+```
+
+---
+
+## **8. Workflow Thực Tế - Bước Từng Bước**
+
+### **Scenario: Code Feature Mới**
+
+```bash
+# Bước 1: Kiểm tra status
+git status
+# On branch main
+# Your branch is up to date with 'origin/main'
+
+# Bước 2: Tạo branch mới
+git checkout -b feature/gps-module
+
+# Bước 3: Code...
+vim src/gps.c
+vim src/gps.h
+
+# Bước 4: Kiểm tra thay đổi
+git status
+# Untracked files:
+#   src/gps.c
+#   src/gps.h
+
+git diff  # Không có gì (files chưa tracked)
+
+# Bước 5: Add files
+git add src/gps.c src/gps.h
+
+# Bước 6: Kiểm tra lại
+git status
+# Changes to be committed:
+#   new file:   src/gps.c
+#   new file:   src/gps.h
+
+git diff --staged  # Xem thay đổi sẽ commit
+
+# Bước 7: Commit
+git commit -m "feat: add GPS coordinate parsing module
+
+- Implement NMEA parser
+- Add latitude/longitude validation
+- Support GGA and RMC sentences"
+
+# Bước 8: Xem lịch sử
+git log --oneline -1
+# abc1234 feat: add GPS coordinate parsing module
+
+# Bước 9: Push lên remote
+git push -u origin feature/gps-module
+```
+
+### **Scenario: Fix Bug Gấp**
+
+```bash
+# Đang code feature, có bug production
+
+# Bước 1: Stash công việc hiện tại
+git stash save "WIP: GPS module"
+
+# Bước 2: Về main branch
+git checkout main
+
+# Bước 3: Tạo hotfix branch
+git checkout -b hotfix/uart-timeout
+
+# Bước 4: Fix bug
+vim src/uart.c
+
+# Bước 5: Test...
+
+# Bước 6: Commit
+git add src/uart.c
+git commit -m "fix: increase UART timeout to 1000ms
+
+Resolves timeout issues when GPS module responds slowly"
+
+# Bước 7: Merge vào main
+git checkout main
+git merge hotfix/uart-timeout
+
+# Bước 8: Push
+git push origin main
+
+# Bước 9: Quay lại công việc cũ
+git checkout feature/gps-module
+git stash pop
+```
+
+---
+
+## **9. Git Commit Checklist**
+
+Trước KHI commit, check:
+
+```bash
+# ✅ 1. Code chạy được?
+# Test code trước
+
+# ✅ 2. Có debug code không?
+git diff | grep -i "printf\|console.log\|debugger"
+
+# ✅ 3. Có TODO không?
+git diff | grep -i "TODO\|FIXME"
+
+# ✅ 4. Commit message rõ ràng?
+# Không: "update", "fix", "asdf"
+# Có: "feat: add GPS parsing"
+
+# ✅ 5. Commit đúng files?
+git status  # Check lại
+
+# ✅ 6. Code style OK?
+# Chạy linter nếu có
+
+# ✅ 7. Có file sensitive không?
+git diff | grep -i "password\|secret\|api.key"
+```
+
+---
+
+Bạn muốn tôi chi tiết hóa thêm phần nào? Ví dụ:
+- Git config chi tiết?
+- Các lệnh git log nâng cao?
+- Setup Git cho embedded project cụ thể (STM32)?
+
+---
+
 
 ### Bài 2: .gitignore và Git Status
 ```bash
