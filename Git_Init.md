@@ -16,6 +16,242 @@ git init
 - Sửa commit message cuối: git commit --amend
 ```
 
+Đúng rồi! **TẤT CẢ** dữ liệu Git của project nằm trong thư mục `.git` đó.
+
+---
+
+## **Cơ Chế Hoạt Động**
+
+```
+D:/Projects/MikroTik/
+├── .git/                    ← TẤT CẢ dữ liệu Git ở đây
+│   ├── objects/             ← Tất cả commits, files, history
+│   ├── refs/                ← Branches, tags
+│   ├── HEAD                 ← Branch hiện tại
+│   ├── config               ← Cấu hình local
+│   ├── hooks/               ← Git hooks
+│   └── logs/                ← Lịch sử thay đổi
+│
+├── src/                     ← Working directory (code của bạn)
+├── main.c
+└── README.md
+```
+
+---
+
+## **Chứng Minh**
+
+```bash
+# Xem dung lượng thư mục .git
+du -sh .git/
+# Ví dụ: 150MB (chứa toàn bộ lịch sử 2 năm)
+
+# Xóa thư mục .git
+rm -rf .git/
+
+# Giờ check git status
+git status
+# fatal: not a git repository
+
+# MẤT HẾT:
+# ❌ Tất cả commits
+# ❌ Tất cả branches
+# ❌ Toàn bộ lịch sử
+# ✅ Code vẫn còn (working directory)
+```
+
+---
+
+## **Chi Tiết Bên Trong `.git/`**
+
+### **1. `.git/objects/` - Kho Lưu Trữ**
+Chứa TẤT CẢ:
+- Mọi commit bạn từng tạo
+- Mọi file trong mọi version
+- Mọi tree (cấu trúc thư mục)
+
+```bash
+# Xem objects
+ls .git/objects/
+# 00/ 01/ 02/ ... ff/  (256 thư mục)
+
+# Mỗi file là 1 object (commit, blob, tree)
+```
+
+**Ví dụ:** Bạn commit file `gps.c` 10 lần → có 10 versions của `gps.c` lưu trong `objects/`
+
+### **2. `.git/refs/` - Branches và Tags**
+```bash
+.git/refs/
+├── heads/          ← Local branches
+│   ├── main
+│   ├── develop
+│   └── feature/gps
+├── remotes/        ← Remote branches
+│   └── origin/
+│       ├── main
+│       └── develop
+└── tags/           ← Tags (v1.0, v2.0)
+```
+
+### **3. `.git/HEAD` - Branch Hiện Tại**
+```bash
+cat .git/HEAD
+# ref: refs/heads/main
+
+# Khi switch branch:
+git checkout develop
+cat .git/HEAD
+# ref: refs/heads/develop
+```
+
+### **4. `.git/config` - Cấu Hình Local**
+```ini
+[core]
+    repositoryformatversion = 0
+[remote "origin"]
+    url = https://github.com/user/mikrotik.git
+    fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+    remote = origin
+    merge = refs/heads/main
+```
+
+---
+
+## **Use Cases Thực Tế**
+
+### **Case 1: Backup Project**
+```bash
+# Backup CẢ project + lịch sử Git
+cp -r D:/Projects/MikroTik D:/Backup/MikroTik
+
+# Hoặc chỉ backup code (không lịch sử)
+cp -r D:/Projects/MikroTik D:/Backup/MikroTik-code-only
+rm -rf D:/Backup/MikroTik-code-only/.git
+```
+
+### **Case 2: Chuyển Project Sang Máy Khác**
+```bash
+# Cách 1: Copy cả thư mục (bao gồm .git)
+# → Có đầy đủ lịch sử, branches
+
+# Cách 2: Clone từ remote
+git clone https://github.com/user/mikrotik.git
+# → Giống hệt, đầy đủ lịch sử
+```
+
+### **Case 3: "Xóa" Lịch Sử Git**
+```bash
+# Scenario: Muốn bắt đầu Git mới, xóa lịch sử cũ
+rm -rf .git/
+git init
+git add .
+git commit -m "Initial commit"
+
+# Giờ chỉ có 1 commit, mất hết lịch sử cũ
+```
+
+**Khi nào dùng:**
+- ✅ Commit nhầm passwords vào lịch sử → xóa .git, init lại
+- ✅ Project cũ rối, muốn bắt đầu lại
+- ❌ KHÔNG làm nếu team đang làm việc chung!
+
+### **Case 4: Git Repository Bị Hỏng**
+```bash
+# Lỗi: .git/objects bị corrupt
+git status
+# error: object file .git/objects/xx/xxx is empty
+
+# Giải pháp 1: Clone lại từ remote
+cd ..
+rm -rf MikroTik
+git clone https://github.com/user/mikrotik.git
+
+# Giải pháp 2: Sửa (nếu không có remote)
+git fsck --full
+# Tìm và fix corrupted objects
+```
+
+### **Case 5: Dung Lượng `.git/` Quá Lớn**
+```bash
+# Scenario: .git/ lên tới 2GB vì commit nhầm file lớn
+
+# Xem file lớn
+git rev-list --objects --all | \
+  git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | \
+  sed -n 's/^blob //p' | \
+  sort --numeric-sort --key=2 | \
+  tail -n 10
+
+# Xóa file khỏi lịch sử (nguy hiểm!)
+git filter-branch --tree-filter 'rm -f big_file.bin' HEAD
+
+# Dọn dẹp
+git gc --aggressive --prune=now
+
+# Kết quả: .git/ giảm từ 2GB xuống 50MB
+```
+
+---
+
+## **So Sánh: Local Project vs Git Repository**
+
+| | Không có Git | Có Git |
+|---|---|---|
+| **Thư mục** | `D:/Projects/MikroTik/` | `D:/Projects/MikroTik/` |
+| **Code** | `src/`, `main.c`, ... | `src/`, `main.c`, ... (giống hệt) |
+| **Lịch sử** | ❌ Không có | ✅ Trong `.git/objects/` |
+| **Branches** | ❌ Không có | ✅ Trong `.git/refs/` |
+| **Backup** | Phải copy thủ công | `git push` lên remote |
+| **Rollback** | ❌ Không thể | `git reset`, `git revert` |
+
+---
+
+## **Kiểm Tra Thực Tế**
+
+```bash
+# 1. Xem kích thước .git
+du -sh .git/
+# Ví dụ: 120MB
+
+# 2. Xem số objects (commits, files, trees)
+git count-objects -v
+# count: 1523
+# size: 125000 KB
+
+# 3. Xem tất cả branches (local + remote)
+git branch -a
+# * main
+#   develop
+#   feature/gps
+#   remotes/origin/main
+#   remotes/origin/develop
+
+# 4. Xem cấu hình
+cat .git/config
+```
+
+---
+
+## **Kết Luận**
+
+✅ **ĐÚNG:** Tất cả dữ liệu Git nằm trong `.git/`
+
+**Điều này có nghĩa:**
+1. Xóa `.git/` = mất hết lịch sử, branches, commits
+2. Copy project = copy cả `.git/` → có đầy đủ lịch sử
+3. `.git/` có thể rất lớn nếu nhiều commits hoặc commit file lớn
+4. Working directory (code của bạn) độc lập với `.git/`
+
+**Tương tự:**
+- `.git/` giống như database lưu lịch sử
+- Working directory là nơi bạn làm việc
+- `git checkout` = lấy version từ database ra working directory
+
+Bạn có muốn tôi giải thích sâu hơn về cấu trúc bên trong `.git/objects/` (cách Git lưu trữ commits và files) không?
+
+
 ### Bài 2: .gitignore và Git Status
 ```bash
 # Tạo file .gitignore cho embedded project
