@@ -81,3 +81,108 @@ Nếu bạn nói mình đang dùng **hệ nào** (Windows / Linux / TrueNAS-ZFS 
 [5]: https://learn.microsoft.com/en-us/windows-server/storage/refs/mirror-accelerated-parity?utm_source=chatgpt.com "Mirror-accelerated parity | Microsoft Learn"
 [6]: https://www.truenas.com/docs/references/slog/?utm_source=chatgpt.com "SLOG Devices | TrueNAS Documentation Hub"
 [7]: https://openzfs.github.io/openzfs-docs/Performance%20and%20Tuning/Workload%20Tuning.html?utm_source=chatgpt.com "Workload Tuning — OpenZFS documentation"
+
+Có — với máy cá nhân (1 SSD + 1 HDD) bạn **vẫn “kết hợp tăng tốc” được**, nhưng thường **không cần RAID** (RAID chủ yếu để *tăng chịu lỗi / tăng tốc bằng nhiều ổ*, còn bạn chỉ có 1 HDD thì RAID không giúp gì).
+
+Cấu hình bạn đang làm (**SSD cài Ubuntu + HDD để dữ liệu**) thật ra là *cách phổ biến và hiệu quả nhất* cho desktop: OS/app chạy trên SSD nên đã “nhanh cảm nhận” rồi. Phần còn lại chỉ là tối ưu cho **dữ liệu hay dùng**.
+
+Dưới đây là các cách nâng cấp theo mức “đáng công”:
+
+---
+
+## 1) Cách đơn giản nhất: để dữ liệu hay dùng trên SSD, dữ liệu nặng trên HDD
+
+Bạn có thể:
+
+* Tạo thư mục trên SSD kiểu `/fast` (hoặc dùng luôn trong `/home` nếu /home nằm SSD).
+* Những thứ “nóng” để SSD:
+
+  * project code, node_modules, venv, cache build
+  * VM images (VirtualBox/VMware), Docker images
+  * thư viện ảnh Lightroom (nếu có), game/Steam library hay chơi
+* Những thứ “lạnh” để HDD: phim, ảnh archive, backup, ISO, torrent, tài liệu ít mở.
+
+**Mẹo nhanh**: dùng symlink để “trông như ở home nhưng thực ra ở SSD”:
+
+```bash
+mv ~/Projects /fast/Projects
+ln -s /fast/Projects ~/Projects
+```
+
+---
+
+## 2) Tối ưu “cảm giác” mà ít rủi ro
+
+* Bật trim cho SSD (thường Ubuntu đã bật):
+
+```bash
+systemctl status fstrim.timer
+```
+
+* Mount HDD với `noatime` để giảm ghi lặt vặt (hợp lý cho HDD dữ liệu):
+
+  * trong `/etc/fstab` thêm option `noatime`
+
+Những cái này không “phép màu” nhưng giúp hệ thống đỡ ì khi HDD bị ghi vặt.
+
+---
+
+## 3) “Kết hợp kiểu hybrid”: dùng **một phần SSD làm cache cho HDD** (giống ý bạn nghe)
+
+Nếu bạn muốn “HDD vẫn là nơi chứa dữ liệu chính, nhưng hay đọc/ghi sẽ được đẩy qua SSD” thì có 2 hướng phổ biến trên Ubuntu:
+
+### A) **LVM Cache (dm-cache)** – khá gọn nếu bạn dùng LVM
+
+* HDD là LV data
+* Cắt 20–100GB SSD làm LV cache
+* Gắn cache vào LV của HDD
+
+**Chế độ nên chọn**
+
+* **writethrough**: an toàn hơn (SSD cache hỏng thường ít thảm hoạ hơn)
+* **writeback**: nhanh ghi hơn nhưng *rủi ro hơn* (mất điện/SSD cache lỗi có thể gây mất dữ liệu)
+
+→ Với máy cá nhân không có UPS, mình thường khuyên **writethrough**.
+
+### B) **bcache** – mạnh, hợp kiểu “SSD cache cho HDD”
+
+* Bạn sẽ “wrap” ổ HDD (hoặc partition) thành backing device
+* SSD (partition) làm cache device
+
+**Lưu ý quan trọng**: Cả LVM cache/bcache đều **không thích** việc bạn đã dùng “toàn bộ SSD cho hệ điều hành” mà giờ muốn cache *toàn bộ* HDD — bạn cần **cắt một phần SSD** đủ lớn làm cache (và chấp nhận bớt chỗ cho `/`).
+
+**Khi nào đáng làm cache?**
+
+* Bạn thường xuyên mở các file lớn nhưng lặp lại (ví dụ: game assets, project build, VM image, database dev)
+* Bạn có workload “random I/O” nhiều trên HDD
+
+**Khi nào không đáng?**
+
+* Chủ yếu copy phim/ảnh 1 lần rồi để đó (tuần tự) → cache ít lợi
+* Bạn đã thấy “khá nhanh” và HDD chỉ dùng archive → giữ nguyên sẽ ổn hơn
+
+---
+
+## 4) Nâng cấp “đáng tiền” nhất nếu có thể: thêm **SSD thứ 2**
+
+Thực tế, nếu bạn có khe NVMe/SATA trống:
+
+* SSD #1: OS + app
+* SSD #2: dữ liệu “hot” (Projects/VM/Docker/game)
+* HDD: dữ liệu “cold” (archive/backup)
+
+Cách này **đơn giản hơn cache**, ít rủi ro hơn, hiệu quả rõ nhất.
+
+---
+
+### Gợi ý chọn nhanh
+
+* Bạn đã hài lòng tốc độ → **giữ như hiện tại** + chuyển “hot data” sang SSD (mục 1) là ngon nhất.
+* Bạn muốn tăng tốc HDD mà không mua thêm SSD → cân nhắc **LVM cache writethrough** (mục 3A).
+* Bạn thích vọc và hiểu rủi ro → **bcache** (mục 3B).
+
+Nếu bạn cho mình 3 thông tin này, mình sẽ gợi ý phương án cụ thể sát nhất (kèm mức rủi ro):
+
+1. SSD và HDD dung lượng bao nhiêu? (và SSD là NVMe hay SATA)
+2. `/home` hiện nằm trên SSD hay HDD?
+3. Dữ liệu bạn muốn “tăng tốc” là loại nào (project code/VM/game/dataset/media…)?
