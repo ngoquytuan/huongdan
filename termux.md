@@ -131,3 +131,66 @@ Sử dụng lệnh `kill` kèm theo số PID bạn vừa tìm được:
 | **Công cụ quản lý tốt nhất** | `tmux` |
 
 Bạn có muốn tôi hướng dẫn chi tiết cách tạo một **systemd service** để script của bạn tự động chạy mỗi khi bật máy Debian không?
+
+Sử dụng **tmux** để chạy nhiều script cùng lúc là một lựa chọn rất thông minh. Thay vì phải mở nhiều kết nối SSH, bạn có thể chia màn hình terminal ra thành nhiều ô (panes) hoặc nhiều cửa sổ (windows) khác nhau ngay trong một phiên làm việc.
+
+Dưới đây là cách bạn có thể chạy 2 hoặc nhiều script song song với tmux:
+
+---
+
+## 1. Cách chia màn hình (Split Panes)
+
+Cách này giúp bạn quan sát cả 2 script đang chạy cùng một lúc trên một màn hình duy nhất.
+
+1. **Mở tmux:** Gõ lệnh `tmux`.
+2. **Chạy script thứ nhất:** Gõ `python3 script1.py`.
+3. **Chia đôi màn hình:**
+* Chia dọc: Nhấn `Ctrl + B`, sau đó nhấn phím `%`.
+* Chia ngang: Nhấn `Ctrl + B`, sau đó nhấn phím `"`.
+
+
+4. **Chuyển sang ô mới:** Nhấn `Ctrl + B`, sau đó dùng các **phím mũi tên** để di chuyển giữa các ô.
+5. **Chạy script thứ hai:** Tại ô mới, gõ `python3 script2.py`.
+
+---
+
+## 2. Cách dùng nhiều cửa sổ (Multiple Windows)
+
+Nếu code của bạn xuất ra quá nhiều log và việc chia nhỏ màn hình làm bạn khó nhìn, hãy dùng cơ chế "Cửa sổ" (giống như các tab trên trình duyệt).
+
+1. **Tạo cửa sổ thứ nhất:** Chạy `python3 script1.py`.
+2. **Tạo cửa sổ mới:** Nhấn `Ctrl + B`, sau đó nhấn phím `C` (Create). Bạn sẽ có một màn hình trống hoàn toàn.
+3. **Chạy script thứ hai:** Tại đây, gõ `python3 script2.py`.
+4. **Di chuyển giữa các cửa sổ:** * `Ctrl + B`, sau đó nhấn `N` (Next) để sang cửa sổ tiếp theo.
+* `Ctrl + B`, sau đó nhấn `P` (Previous) để về cửa sổ trước đó.
+* `Ctrl + B`, sau đó nhấn số hiệu cửa sổ (ví dụ `0`, `1`, `2`).
+
+
+
+---
+
+## 3. Các lệnh điều khiển cần nhớ
+
+Để quản lý hiệu quả, bạn nên nhớ các tổ hợp phím sau (Luôn bắt đầu bằng **`Ctrl + B`**):
+
+| Thao tác | Phím tắt (sau Ctrl+B) |
+| --- | --- |
+| **Thoát tạm thời (Detach)** | `D` (Script vẫn chạy ngầm) |
+| **Chia màn hình dọc** | `%` |
+| **Chia màn hình ngang** | `"` |
+| **Tạo cửa sổ mới** | `C` |
+| **Đóng ô hiện tại** | Gõ `exit` hoặc `Ctrl + D` |
+| **Quay lại phiên cũ** | (Lệnh ngoài terminal) `tmux attach` |
+
+---
+
+## 4. Mẹo nhỏ: Đặt tên cho phiên làm việc
+
+Khi bạn chạy nhiều dự án, thay vì chỉ gõ `tmux`, bạn hãy đặt tên để dễ quản lý:
+
+* Khởi tạo: `tmux new -s my_project`
+* Khi muốn quay lại đúng dự án đó: `tmux attach -t my_project`
+
+Việc này giúp bạn không bị nhầm lẫn giữa các script khác nhau khi làm việc lâu dài trên server.
+
+Bạn có muốn tôi hướng dẫn cách cài đặt một "Dashboard" trong terminal (như **htop**) để bạn vừa chạy script vừa theo dõi được nhiệt độ và RAM của máy Debian không?
