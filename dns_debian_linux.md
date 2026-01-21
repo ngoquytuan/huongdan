@@ -272,3 +272,141 @@ sudo apt install htop nvtop -y
 Trong giao diện `nvtop`, bạn có thể nhấn phím **`F2`** (Setup) để tùy chỉnh các cột hiển thị hoặc phím **`F6`** để sắp xếp các tiến trình theo lượng VRAM tiêu thụ nhiều nhất.
 
 **Bạn đã cài đặt thành công chưa? Nếu rồi, bạn có muốn tôi chỉ cách cấu hình để mỗi khi bạn SSH vào máy, nó tự động mở sẵn giao diện tmux với htop và nvtop không?**
+
+Bạn đang gặp phải lỗi **Permission denied (Quyền truy cập bị từ chối)**.
+
+Cụ thể, script Python của bạn cố gắng tạo một thư mục tại đường dẫn `/opt/chatbot-storage`, nhưng user `omen` mà bạn đang dùng không có quyền ghi (write) vào thư mục hệ thống `/opt`.
+
+Dưới đây là 3 cách để giải quyết vấn đề này:
+
+---
+
+### Cách 1: Cấp quyền cho user hiện tại (Khuyên dùng)
+
+Bạn có thể tạo trước thư mục đó bằng quyền `sudo` và chuyển quyền sở hữu thư mục đó cho user `omen`. Đây là cách sạch sẽ nhất:
+
+```bash
+# Tạo thư mục bằng quyền admin
+sudo mkdir -p /opt/chatbot-storage
+
+# Chuyển quyền sở hữu cho user 'omen' và group 'omen'
+sudo chown -R omen:omen /opt/chatbot-storage
+
+# Cấp quyền đọc/ghi cho chủ sở hữu
+sudo chmod -R 755 /opt/chatbot-storage
+
+```
+
+Sau đó, bạn chạy lại lệnh `python -m uvicorn ...` là sẽ thành công.
+
+---
+
+### Cách 2: Chỉnh sửa đường dẫn lưu trữ trong file `.env`
+
+Thông thường, các dự án này sẽ cho phép cấu hình nơi lưu trữ dữ liệu. Nếu bạn không muốn lưu vào `/opt`, hãy kiểm tra file `.env` của bạn:
+
+1. Mở file `.env`: `nano .env`
+2. Tìm dòng cấu hình liên quan đến đường dẫn storage (có thể tên là `STORAGE_PATH`, `FILE_STORAGE_DIR`, hoặc `BASE_PATH`).
+3. Sửa nó thành một đường dẫn mà user `omen` có toàn quyền, ví dụ:
+`STORAGE_PATH=/home/omen/chatbot-storage`
+4. Lưu và chạy lại script.
+
+---
+
+### Cách 3: Chạy script với quyền sudo (Không khuyến khích)
+
+Bạn có thể chạy toàn bộ lệnh uvicorn bằng `sudo`, nhưng cách này **không tốt** vì nó có thể tạo ra các file log hoặc database mà sau này user thường không thể can thiệp được, và nó cũng tiềm ẩn rủi ro bảo mật.
+
+```bash
+sudo /opt/fr03/venv/bin/python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+```
+
+---
+
+### Phân tích log của bạn (Thông tin thêm)
+
+* **Lỗi 1 (Timeout):** Lúc đầu bạn bị lỗi kết nối đến ChromaDB (192.168.22.172:8001). Có vẻ sau khi bạn sửa `.env` thì lỗi này đã hết.
+* **Lỗi 2 (Permission):** Hệ thống đã kết nối được Redis, PostgreSQL và ChromaDB thành công (All storage systems initialized successfully). Chỉ còn bước tạo thư mục lưu file cục bộ `/opt/chatbot-storage` là bị chặn.
+
+**Lời khuyên:** Bạn hãy thực hiện **Cách 1**, sau đó mở `tmux` và chạy script trong đó để nó không bị tắt khi bạn đóng cửa sổ SSH nhé.
+
+Bạn có muốn tôi hướng dẫn cách gộp lệnh chạy này vào một file shell script (`.sh`) để lần sau chỉ cần chạy 1 câu lệnh ngắn không?
+
+Chúc mừng bạn! Log hiển thị **`Application startup complete`** nghĩa là server của bạn đã chạy hoàn toàn bình thường và kết nối thành công tới tất cả database (PostgreSQL, Redis, ChromaDB).
+
+Việc bạn không truy cập được vào `http://192.168.22.167:8000/` thường do 3 lý do phổ biến sau:
+
+---
+
+### 1. Chưa có trang chủ (Root Path)
+
+Hầu hết các API Python (FastAPI/Uvicorn) không mặc định hiển thị nội dung gì khi bạn vào đường dẫn gốc `/`.
+
+* **Cách kiểm tra:** Bạn hãy thử truy cập vào trang tài liệu tự động (Swagger UI) bằng cách thêm `/docs` vào sau IP:
+👉 **`http://192.168.22.167:8000/docs`**
+* Nếu vào được trang này và thấy danh sách các hàm API, nghĩa là server đã thông suốt.
+
+### 2. Tường lửa (Firewall) chặn Port 8000
+
+Debian/Ubuntu thường có tường lửa `ufw` chặn các cổng lạ. Bạn cần mở cổng 8000 để máy khác trong mạng LAN có thể truy cập:
+
+1. **Kiểm tra trạng thái ufw:**
+```bash
+sudo ufw status
+
+```
+
+
+2. **Nếu nó đang "active", hãy mở port 8000:**
+```bash
+sudo ufw allow 8000/tcp
+
+```
+
+
+
+### 3. Kiểm tra IP thực tế của máy Debian
+
+Bạn chắc chắn `192.168.22.167` là IP của máy Debian chứ không phải máy chứa Database (`...172`)?
+
+* Chạy lệnh này trên máy Debian để xác nhận lại:
+```bash
+ip addr show | grep 192.168
+
+```
+
+
+
+---
+
+### 4. Cách kiểm tra nhanh nhất bằng lệnh ngay trên server
+
+Để biết server có thực sự đang "phản hồi" không, bạn mở một Terminal khác (hoặc dùng `tmux` chia ô) và gõ:
+
+```bash
+curl -I http://localhost:8000
+
+```
+
+* Nếu nó trả về `HTTP/1.1 200 OK` hoặc `404 Not Found`, nghĩa là server **đang chạy**.
+* Nếu nó báo `Connection refused`, nghĩa là server **đã sập**.
+
+---
+
+### Bước tiếp theo: Chạy ngầm để không bị ngắt
+
+Hiện tại bạn đang chạy trực tiếp, nếu bạn đóng SSH là script sẽ dừng. Bây giờ bạn hãy áp dụng kiến thức **tmux** đã cài lúc nãy:
+
+1. Nhấn `Ctrl + C` để dừng script đang chạy.
+2. Gõ `tmux new -s chatbot`.
+3. Trong cửa sổ tmux, chạy lại lệnh:
+```bash
+python3 -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+
+```
+
+
+4. Nhấn `Ctrl + B` rồi nhấn `D` để thoát ra (script vẫn chạy ngầm).
+
+**Bạn có vào được đường dẫn `/docs` không?** Nếu vẫn không được, hãy cho tôi biết kết quả của lệnh `sudo ufw status` nhé!
