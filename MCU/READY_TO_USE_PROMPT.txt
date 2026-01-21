@@ -1,0 +1,287 @@
+═══════════════════════════════════════════════════════════════════════════
+COPY EVERYTHING BELOW THIS LINE AND PASTE TO CLAUDE
+═══════════════════════════════════════════════════════════════════════════
+
+You are an embedded C expert specializing in stack optimization for bare metal STM32 systems.
+
+# PROJECT CONTEXT
+
+**Target MCU**: STM32G474 (128KB RAM, 512KB Flash)
+**Application**: GPS/NTP synchronized clock with Ethernet web interface
+**Current Issue**: Stack overflow causing intermittent system failures
+**Stack Size**: 2048 bytes (limited)
+**Architecture**: Bare metal (no RTOS)
+
+# YOUR TASK
+
+Analyze the source code in `/mnt/project/` directory and identify functions that should be **inlined** to reduce call depth and optimize stack usage.
+
+# ANALYSIS METHODOLOGY
+
+## Step 1: Scan Source Files
+Use the `view` tool to examine these critical files:
+- `/mnt/project/main.c`
+- `/mnt/project/slaveControl.c` 
+- `/mnt/project/gps.c` and `/mnt/project/gps.h`
+- `/mnt/project/slave_*.c` files
+- Any other files in `/mnt/project/` relevant to timing
+
+## Step 2: Build Call Graph
+Map function call chains starting from `main()`:
+- Identify maximum call depth
+- Focus on GPS timing path: `main() → ... → gps_once() → stable_frac_offset()`
+- Focus on NTP path: `main() → ... → ntp_client()`
+- Focus on display path: `main() → ... → display_update()`
+
+## Step 3: Identify Inline Candidates
+Find functions matching these criteria:
+
+### HIGH PRIORITY (Must inline):
+- Call depth > 6 levels
+- Function size < 15 lines
+- Called in 1-2 places only
+- Minimal local buffers (< 32 bytes)
+- In critical timing paths
+
+### MEDIUM PRIORITY (Should inline):
+- Call depth = 5-6 levels
+- Function size < 25 lines
+- Called in 2-3 places
+- Local buffers < 64 bytes
+
+### LOW PRIORITY (Consider inline):
+- Call depth = 4-5 levels
+- Function size < 30 lines
+- Called in 3-4 places
+
+## Step 4: Calculate Stack Impact
+
+For each candidate, calculate:
+```
+Stack Savings = (Current Depth - New Depth) × 32 bytes
+              + Eliminated local variables
+```
+
+# OUTPUT FORMAT
+
+For each inline candidate, provide this structured report:
+
+```markdown
+## 🎯 Function: `function_name()`
+
+**📍 Location**: `filename.c:line_number`
+
+**📊 Metrics**:
+- Current Call Depth: X levels
+- Function Size: Y lines of code
+- Local Variables: Z bytes
+- Called From: N locations
+- Stack Frame Cost: ~32 bytes
+
+**🔗 Current Call Chain**:
+```
+main() 
+  → system_main_loop()      [Level 1]
+    → slaveClockRun()       [Level 2]
+      → oneSecondfucns()    [Level 3]
+        → gps_once()        [Level 4]
+          → THIS_FUNCTION() [Level 5]
+```
+
+**💾 Stack Impact**:
+- Current stack usage: X bytes (call chain overhead)
+- After inline: Y bytes
+- **SAVINGS: Z bytes**
+
+**🎚️ Priority**: 🔴 HIGH / 🟡 MEDIUM / 🟢 LOW
+
+**✅ Recommendation**: INLINE / KEEP SEPARATE
+
+**📝 Rationale**:
+1. Reason 1 (e.g., deep call chain)
+2. Reason 2 (e.g., small function size)
+3. Reason 3 (e.g., only called once)
+
+**🔧 Implementation**:
+
+**BEFORE** (Current Code):
+```c
+void parent_function(void) {
+    // ... code ...
+    child_function();  // Call to be inlined
+    // ... code ...
+}
+
+void child_function(void) {
+    // Function to inline
+    int local_var = 10;
+    // ... logic ...
+}
+```
+
+**AFTER** (Inlined Code):
+```c
+void parent_function(void) {
+    // ... code ...
+    
+    // ✅ INLINED: child_function()
+    {
+        int local_var = 10;
+        // ... inlined logic ...
+    }
+    
+    // ... code ...
+}
+
+// ❌ REMOVED: child_function()
+```
+
+**⚠️ Risk Assessment**:
+- Code duplication: None / Low / High
+- Maintainability: Good / Acceptable / Poor
+- Testing required: Minimal / Moderate / Extensive
+
+---
+```
+
+# SPECIFIC AREAS TO ANALYZE
+
+## Critical Function Chains (Known Issues):
+
+1. **GPS Timing Chain** (HIGHEST PRIORITY):
+   ```
+   oneSecondfucns() → gps_once() → stable_frac_offset()
+   ```
+   This chain is causing stack overflow. Analyze and recommend inline strategy.
+
+2. **Display Update Chain**:
+   ```
+   main() → system_main_loop() → slaveClockRun() → display_*()
+   ```
+
+3. **Network Processing**:
+   ```
+   main() → system_main_loop() → network_*()
+   ```
+
+# CONSTRAINTS
+
+**DO NOT inline if**:
+- Function > 30 lines
+- Called > 4 places (code bloat)
+- Contains large buffers (> 128 bytes local vars)
+- Recursive or complex logic
+
+**MUST preserve**:
+- All functionality and behavior
+- GPS timing accuracy (sub-millisecond)
+- Code readability
+- Debugging capability
+
+# DELIVERABLES
+
+Provide a comprehensive report with:
+
+1. **Executive Summary**
+   - Total functions analyzed
+   - Inline candidates found (by priority)
+   - Total potential stack savings
+
+2. **Top 10 Inline Candidates** (sorted by priority)
+   - Complete analysis for each (use format above)
+   - Code examples before/after
+   - Stack impact calculations
+
+3. **Call Depth Analysis**
+   - Current maximum call depth
+   - After optimization call depth
+   - Visual call graph (ASCII diagram)
+
+4. **Implementation Roadmap**
+   - Phase 1: Critical (do immediately)
+   - Phase 2: Important (this sprint)
+   - Phase 3: Optional (next sprint)
+
+5. **Risk Assessment**
+   - Potential issues
+   - Testing recommendations
+   - Rollback strategy
+
+6. **Summary Table**
+
+| Function | Location | Depth | Size | Calls | Savings | Priority |
+|----------|----------|-------|------|-------|---------|----------|
+| func1()  | file:123 | 7     | 10   | 1     | 64B     | HIGH     |
+| ...      | ...      | ...   | ...  | ...   | ...     | ...      |
+
+**Total Potential Savings**: XXX bytes
+
+# EXAMPLE (for reference)
+
+```markdown
+## 🎯 Function: `stable_frac_offset()`
+
+**📍 Location**: `gps.c:245`
+
+**📊 Metrics**:
+- Current Call Depth: 7 levels  
+- Function Size: 12 lines
+- Local Variables: 4 bytes
+- Called From: 1 location (gps_once only)
+- Stack Frame Cost: ~32 bytes
+
+**🔗 Current Call Chain**:
+```
+main() 
+  → system_main_loop()      [1: +32B]
+    → slaveClockRun()       [2: +32B]
+      → oneSecondfucns()    [3: +32B]
+        → gps_once()        [4: +32B]
+          → stable_frac_offset() [5: +32B]
+            → LOG_DEBUG()   [6: +256B vsnprintf]
+
+TOTAL OVERHEAD: 416 bytes
+```
+
+**💾 Stack Impact**:
+- Current: 416 bytes overhead
+- After inline: 224 bytes overhead
+- **SAVINGS: 192 bytes (46% reduction)**
+
+**🎚️ Priority**: 🔴 HIGH
+
+**✅ Recommendation**: INLINE into oneSecondfucns()
+
+**📝 Rationale**:
+1. Very deep call chain (7 levels) - major stack pressure
+2. Small function (12 lines) - perfect candidate
+3. Called only once - zero code duplication
+4. Critical GPS timing path - inline improves performance
+5. High stack savings (192 bytes = 9.4% of total stack!)
+
+**🔧 Implementation**: [code examples here]
+
+**⚠️ Risk Assessment**:
+- Code duplication: None (called once)
+- Maintainability: Good (logic stays together)
+- Testing required: Minimal (preserve exact behavior)
+```
+
+# BEGIN ANALYSIS
+
+Start by:
+1. Viewing the main source files
+2. Building the call graph
+3. Identifying all inline candidates
+4. Generating the complete report
+
+**Focus especially on functions already known to cause issues:**
+- `gps_once()`
+- `stable_frac_offset()`
+- Any functions in call chains > 6 levels
+
+Provide actionable, implementation-ready recommendations with complete code examples.
+
+═══════════════════════════════════════════════════════════════════════════
+END OF PROMPT - PASTE EVERYTHING ABOVE TO CLAUDE
+═══════════════════════════════════════════════════════════════════════════
