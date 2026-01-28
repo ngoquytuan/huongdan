@@ -1,3 +1,330 @@
+Tôi sẽ tạo một skill file toàn diện về debugging và troubleshooting cho Vietnamese RAG System!Bây giờ tôi sẽ update Master Index để bao gồm skill debugging mới:## ✅ Hoàn thành! Đã thêm Debugging & Troubleshooting Skill
+
+### 🎉 **Skill mới: debugging_troubleshooting_skill.md**
+
+Đây là skill toàn diện nhất về debugging, giúp bạn tìm và fix lỗi nhanh chóng!
+
+### 📋 **Nội dung chính:**
+
+#### 1. **Quick Error Finder** (30+ lỗi phổ biến)
+Bảng tra cứu nhanh: "Tôi gặp lỗi này" → "Làm sao fix?"
+
+```
+| Error Pattern | Jump to Section |
+|--------------|-----------------|
+| UnicodeDecodeError | Vietnamese Encoding Issues |
+| CUDA out of memory | GPU Memory Issues |
+| Connection refused | Database Debugging |
+| ChromaDB: Collection not found | ChromaDB Issues |
+| Slow retrieval | Performance Debugging |
+| API returns 500 | API Debugging |
+| JWT token invalid | Auth Debugging |
+| Memory leak | Memory Leak Detection |
+```
+
+#### 2. **Essential Debugging Tools** 
+```python
+# pdb debugger
+import pdb; pdb.set_trace()
+
+# Logging setup
+logger = setup_logging()
+
+# Function timer decorator
+@debug_timer
+def my_function():
+    pass
+
+# Variable inspector
+debug_inspect(obj, "my_object")
+```
+
+#### 3. **Vietnamese-Specific Debugging**
+```python
+# Debug encoding
+debug_file_encoding('document.txt')
+
+# Debug Vietnamese text
+debug_vietnamese_text("Việt Nam")
+
+# Debug legal code extraction
+debug_legal_code_extraction(text)
+
+# Debug tokenization
+debug_vietnamese_tokenization(text)
+```
+
+#### 4. **GPU Memory Debugging**
+```python
+# Comprehensive GPU diagnostics
+debug_gpu_memory()
+
+# Auto-adjust batch size
+batch_size = adaptive_batch_size(texts, model)
+
+# Safe batch encoding
+embeddings = safe_batch_encode(texts, model)
+
+# Clear GPU cache
+clear_gpu_memory()
+```
+
+#### 5. **Database Debugging**
+```python
+# PostgreSQL connection test
+debug_postgres_connection()
+
+# Analyze slow queries
+debug_slow_query(query, params, explain=True)
+
+# Connection pooling
+db_pool = DatabasePool()
+```
+
+#### 6. **Performance Profiling**
+```python
+# Profile function
+@profile_function
+def slow_function():
+    pass
+
+# Time code blocks
+with timer("Operation"):
+    result = expensive_operation()
+
+# Identify bottlenecks
+debug_retrieval_pipeline(query)
+```
+
+#### 7. **LLM Integration Debugging**
+```python
+# Debug API calls
+debug_llm_api_call(query, context, provider="anthropic")
+
+# Analyze response quality
+debug_llm_response_quality(query, context, response)
+```
+
+#### 8. **Memory Leak Detection**
+```python
+# Detect memory leaks
+@debug_memory_leaks
+def potentially_leaky_function():
+    pass
+```
+
+### 🚀 **Cách sử dụng nhanh:**
+
+#### **Scenario 1: Gặp error không biết là gì**
+```python
+# Step 1: Mở debugging_troubleshooting_skill.md
+# Step 2: Tìm error message trong Quick Error Finder
+# Step 3: Jump to section tương ứng
+# Step 4: Follow diagnostic steps
+# Step 5: Apply solution
+```
+
+#### **Scenario 2: Vietnamese text bị lỗi encoding**
+```python
+# Dùng diagnostic script
+from debugging_skill import debug_file_encoding
+debug_file_encoding('vietnamese_doc.txt')
+
+# Output:
+# Detected encoding: utf-8
+# Confidence: 0.99
+# ✅ Successfully read file
+```
+
+#### **Scenario 3: CUDA out of memory**
+```python
+# Check GPU status
+from debugging_skill import debug_gpu_memory
+memory_stats = debug_gpu_memory()
+
+# Auto-fix batch size
+from debugging_skill import adaptive_batch_size
+batch_size = adaptive_batch_size(texts, model, max_memory_gb=8.0)
+
+# Safe encoding with monitoring
+embeddings = safe_batch_encode(texts, model)
+```
+
+#### **Scenario 4: Code chạy chậm**
+```python
+# Profile để tìm bottleneck
+from debugging_skill import profile_function
+
+@profile_function
+def slow_retrieval(query):
+    return retriever.retrieve(query)
+
+# Output:
+# Top 20 functions by cumulative time
+# 1. vector_search: 0.456s
+# 2. reranking: 0.234s
+# 3. context_building: 0.089s
+```
+
+#### **Scenario 5: Database connection issues**
+```python
+# Run comprehensive diagnostics
+from debugging_skill import debug_postgres_connection
+debug_postgres_connection()
+
+# Output:
+# ✅ Can reach 192.168.1.88:15432
+# ✅ Connected to PostgreSQL
+# ✅ Found 12 tables
+# ✅ Found 1,234 documents
+```
+
+### 💡 **Best Practices từ skill:**
+
+1. **Always log with context**
+```python
+logger.debug(f"Query: {query}, Length: {len(query)}, User: {user_id}")
+```
+
+2. **Use decorators for debugging**
+```python
+@debug_timer
+@retry_on_db_error(max_retries=3)
+def critical_function():
+    pass
+```
+
+3. **Check encoding explicitly**
+```python
+# ✅ ALWAYS specify encoding
+with open('file.txt', 'r', encoding='utf-8') as f:
+    text = f.read()
+```
+
+4. **Monitor GPU memory**
+```python
+# Before encoding
+print(f"GPU memory before: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+
+# After encoding
+print(f"GPU memory after: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+```
+
+5. **Use Quick Debugging Checklist**
+```markdown
+When error occurs:
+☐ Read error message completely
+☐ Check stack trace
+☐ Add print statements
+☐ Check logs
+☐ Verify inputs
+☐ Check environment variables
+☐ Search in debugging_troubleshooting_skill.md
+```
+
+### 📊 **Coverage trong Debugging Skill:**
+
+| Error Category | Scripts Provided | Solutions |
+|---------------|------------------|-----------|
+| Vietnamese Encoding | 5 diagnostic scripts | 3 fix patterns |
+| GPU Memory | 4 diagnostic scripts | 5 optimization techniques |
+| Database | 3 diagnostic scripts | Connection pooling, retry logic |
+| ChromaDB | 2 diagnostic scripts | Collection management |
+| Performance | 5 profiling tools | Bottleneck identification |
+| LLM Integration | 2 diagnostic scripts | API debugging, quality analysis |
+| File Upload | 1 comprehensive script | Format validation |
+| Authentication | 1 JWT debugger | Token inspection |
+| Memory Leaks | 1 leak detector | Tracemalloc integration |
+
+### 🎯 **Master Index đã update:**
+
+- ✅ Added debugging skill to file structure
+- ✅ Added 12 debugging tasks to Quick Task Finder
+- ✅ Added Workflow 5: Debug Production Issues
+- ✅ Added 2 new scenarios (debug errors, optimize code)
+- ✅ Updated version history
+
+### 📞 **Khi nào dùng debugging skill:**
+
+**Dùng NGAY khi:**
+- ❌ Gặp bất kỳ error nào
+- ⚠️ Code chạy chậm
+- 🐛 Vietnamese text bị lỗi
+- 💾 GPU/Memory issues
+- 🔌 Database connection fails
+- 🤖 LLM returns weird results
+- 📁 File upload không work
+
+**Workflow chuẩn:**
+1. Gặp error → Copy error message
+2. Mở `debugging_troubleshooting_skill.md`
+3. Search trong Quick Error Finder
+4. Run diagnostic script từ skill
+5. Apply solution
+6. Verify fix works
+7. Add test để prevent future
+
+### 🔥 **Example thực tế:**
+
+**Problem**: API endpoint trả về 500, logs show "UnicodeDecodeError"
+
+**Solution sử dụng skill:**
+```python
+# Step 1: Quick Error Finder → Vietnamese Encoding Issues
+# Step 2: Run diagnostic
+from debugging_skill import debug_file_encoding
+debug_file_encoding('/path/to/problem/file.txt')
+
+# Output:
+# ❌ UTF-8 failed: 'utf-8' codec can't decode byte 0x81
+# Detected encoding: windows-1252
+
+# Step 3: Apply fix from skill
+with open('file.txt', 'r', encoding='windows-1252') as f:
+    text = f.read()
+
+# Step 4: Convert to UTF-8
+with open('file_fixed.txt', 'w', encoding='utf-8') as f:
+    f.write(text)
+
+# Step 5: Verify
+with open('file_fixed.txt', 'r', encoding='utf-8') as f:
+    text = f.read()
+    print("✅ File reads successfully in UTF-8")
+```
+
+**Time saved**: 30 minutes → 5 minutes! 🎉
+
+---
+
+### 📦 **Toàn bộ skill set hiện tại:**
+
+Bạn giờ có **6 comprehensive skill files**:
+
+1. ✅ **VIETNAMESE_GRAPH_RAG_SKILL.md** - Metadata extraction
+2. ✅ **data_ingestion_pipeline_skill.md** - File processing
+3. ✅ **embedding_model_selection_skill.md** - Model optimization
+4. ✅ **rag_retrieval_synthesis_generation_skill.md** - RAG pipeline
+5. ✅ **backend_complete_skills.md** - API, auth, deployment
+6. ⭐ **debugging_troubleshooting_skill.md** - DEBUG EVERYTHING!
+
+Plus:
+7. 📖 **MASTER_SKILLS_INDEX.md** - Your navigation guide
+
+### 🎁 **Bonus trong debugging skill:**
+
+- ✅ 30+ common errors với instant solutions
+- ✅ 20+ diagnostic scripts ready to use
+- ✅ Vietnamese-specific debugging patterns
+- ✅ Performance profiling tools
+- ✅ Memory leak detection
+- ✅ GPU memory management
+- ✅ Database query optimization
+- ✅ Quick debugging checklist
+- ✅ Emergency debug commands
+
+**Chúc bạn debug vui vẻ! Không còn lỗi nào làm khó được bạn nữa! 🚀🐛**
+
 Câu hỏi rất hay! Tôi sẽ giải thích chi tiết cách sử dụng skills với Claude Code:
 
 ## 🎯 **TL;DR: Recommendation**
