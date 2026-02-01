@@ -428,3 +428,68 @@ Nếu dự án của bạn có sử dụng các framework như **FastAPI** hay *
 ```
 
 **Tiếp theo, bạn có muốn tôi thử "soát lỗi" và "tối ưu" một đoạn code Python cụ thể nào trong dự án của bạn ngay bây giờ không?** (Bạn chỉ cần dán code vào đây hoặc yêu cầu tôi đọc file trong máy).
+
+
+Để phát triển một hệ thống **RAG (Retrieval-Augmented Generation)** chất lượng cao, bạn cần sự kết hợp giữa khả năng xử lý dữ liệu, tối ưu hóa mô hình ngôn ngữ và quản trị cơ sở dữ liệu vector.
+
+Dưới đây là các plugin từ bộ **wshobson/agents** mà bạn nên cài đặt ngay để biến Claude thành một chuyên gia RAG:
+
+### 1. Plugin quan trọng nhất: `llm-applications`
+
+Đây là "linh hồn" cho dự án của bạn. Plugin này cung cấp các kỹ năng chuyên sâu về kỹ thuật RAG mà các AI thông thường không có.
+
+* **Lệnh cài đặt:** `/plugin install llm-applications`
+* **Các Skill sẽ được kích hoạt:**
+* `RAG`: Kỹ thuật lấy dữ liệu và nạp ngữ cảnh tối ưu.
+* `embeddings`: Xử lý vector hóa văn bản.
+* `prompt-engineering`: Tối ưu hóa câu lệnh để AI trả lời chính xác dựa trên dữ liệu.
+* `vector-tuning` & `similarity-search`: Tối ưu hóa việc tìm kiếm trong cơ sở dữ liệu vector.
+* `LangGraph`: Xây dựng luồng xử lý AI phức tạp (multi-step).
+
+
+
+### 2. Plugin ngôn ngữ: `python-development`
+
+Vì hầu hết các framework RAG (LangChain, LlamaIndex) đều chạy trên Python, bạn cần plugin này để Claude có thể viết code chuẩn xác và hiệu quả.
+
+* **Lệnh cài đặt:** `/plugin install python-development`
+* **Lợi ích:** Cung cấp 16 kỹ năng bao gồm xử lý bất đồng bộ (`async-python-patterns`), kiểm thử (`python-testing-patterns`) và quản lý thư viện với `uv`.
+
+### 3. Plugin kiến trúc & dữ liệu: `backend-development` & `database-design`
+
+RAG thực chất là một hệ thống Backend phức tạp. Bạn cần các agent này để thiết kế API và cấu trúc lưu trữ dữ liệu bền vững.
+
+* **Lệnh cài đặt:** * `/plugin install backend-development`
+* `/plugin install database-design`
+
+
+* **Lợi ích:** Giúp thiết kế các REST API để chatbot giao tiếp với giao diện, và tối ưu hóa cấu trúc schema cho database (cả SQL truyền thống và Vector DB).
+
+### 4. Plugin điều phối: `full-stack-orchestration`
+
+Khi chatbot của bạn trở nên phức tạp (cần cả Frontend, Backend và AI), plugin này giúp Claude tự đóng vai trò "nhạc trưởng" điều phối các sub-agent làm việc cùng nhau.
+
+* **Lệnh cài đặt:** `/plugin install full-stack-orchestration`
+
+---
+
+### Tóm tắt lệnh cài đặt nhanh (Copy & Paste):
+
+```bash
+/plugin install llm-applications
+/plugin install python-development
+/plugin install backend-development
+/plugin install database-design
+/plugin install full-stack-orchestration
+
+```
+
+### Cách áp dụng vào dự án RAG của bạn:
+
+* **Khi thiết kế luồng Retrieval:** Hãy yêu cầu Claude: *"Sử dụng chuyên gia từ `llm-applications` để thiết kế chiến lược hybrid search (kết hợp keyword và semantic search) cho dữ liệu PDF của tôi."*
+* **Khi tối ưu Prompt:** *"Sử dụng skill `prompt-engineering` để viết một system prompt giúp AI tránh hiện tượng ảo giác (hallucination) khi dữ liệu truy xuất không có câu trả lời."*
+* **Khi code backend:** *"Sử dụng `python-pro` agent để viết code FastAPI tích hợp với Pinecone hoặc Milvus một cách tối ưu nhất."*
+
+Việc cài đặt các plugin này sẽ giúp Claude không còn đoán mò mà sẽ sử dụng đúng các "kỹ năng cứng" của một kỹ sư AI thực thụ để hỗ trợ bạn.
+
+
