@@ -355,3 +355,76 @@ Nếu bạn đang làm các dự án phức tạp, Superpowers giúp AI giữ đ
 > **Lưu ý nhỏ:** Công cụ này cực kỳ thích hợp nếu bạn muốn AI đóng vai trò như một **Senior Engineer** dẫn dắt các **Junior Subagents**, thay vì chỉ là một chatbot viết code đơn thuần.
 
 Bạn có đang sử dụng **Claude Code** hay một công cụ AI coding nào cụ thể không? Tôi có thể hướng dẫn bạn cấu hình chi tiết hơn cho công cụ đó.
+
+
+Với các dự án Python hiện có, bạn có thể kết hợp sức mạnh của **Superpowers** (quy trình) và **wshobson agents** (chuyên môn) để xử lý trọn gói 4 yêu cầu của bạn.
+
+Dưới đây là "đội hình" skill tối ưu nhất cho từng bước:
+
+### 1. Kiểm tra lỗi & Tối ưu (Bug Fix & Optimization)
+
+Thay vì chỉ hỏi chung chung, bạn nên dùng các agent chuyên sâu về Python để thực hiện "Code Review".
+
+* **Plugin:** `python-development` (từ marketplace `wshobson/agents`).
+* **Skill cụ thể:** * `systematic-debugging` (của Superpowers): Giúp tìm lỗi logic theo 4 bước bài bản thay vì đoán mò.
+* `python-pro` agent: Chuyên gia về hiệu năng và cấu trúc Python.
+
+
+* **Cách làm:**
+> *"Sử dụng `python-pro` agent và skill `systematic-debugging` để kiểm tra các lỗ hổng hiệu năng và lỗi tiềm ẩn trong file `main.py` này."*
+
+
+
+### 2. Viết Test (Testing)
+
+Để đảm bảo code chạy đúng và không bị lỗi sau này, bạn cần bộ kỹ năng về **Pytest** và quy trình **TDD**.
+
+* **Plugin:** `Superpowers` + `python-development`.
+* **Skill cụ thể:** * `test-driven-development` (Superpowers): Ép AI viết test trước khi sửa code.
+* `python-testing-patterns` (wshobson): Cung cấp các mẫu test chuẩn cho Python (fixtures, mocking).
+
+
+* **Cách làm:**
+> *"Hãy sử dụng skill `python-testing-patterns` để viết bộ unit test bằng Pytest cho module này, đảm bảo độ bao phủ (coverage) trên 90%."*
+
+
+
+### 3. Viết tài liệu Handover (Handover Documentation)
+
+Đây là lúc bạn cần những agent chuyên về trình bày và cấu trúc hệ thống.
+
+* **Plugin:** `documentation` (từ marketplace `wshobson/agents`) và `planning-with-files`.
+* **Skill cụ thể:**
+* `code-docs`: Tự động tạo docstring và file README.
+* `C4-architecture`: Vẽ sơ đồ kiến trúc hệ thống (dạng text hoặc Mermaid).
+* `planning-with-files`: Để lưu tài liệu handover thành một file `.md` ngay trong project.
+
+
+* **Cách làm:**
+> *"Sử dụng skill `code-docs` và `planning-with-files` để soạn một file `HANDOVER.md`. Nội dung bao gồm: Kiến trúc hệ thống, cách cài đặt, các điểm cần lưu ý khi vận hành và danh sách các API chính."*
+
+
+
+---
+
+### Tổng hợp lộ trình thực hiện nhanh:
+
+| Bước | Lệnh/Skill ưu tiên | Mục tiêu |
+| --- | --- | --- |
+| **B1: Quét lỗi** | `python-pro` + `linting` | Tìm lỗi cú pháp, chuẩn PEP8 và logic. |
+| **B2: Tối ưu** | `performance-optimization` | Giảm độ phức tạp thuật toán, tối ưu bộ nhớ. |
+| **B3: Test** | `/superpowers:execute-plan` | Chạy bộ test tự động để xác nhận code chạy đúng. |
+| **B4: Handover** | `api-specs` + `planning-with-files` | Xuất file Markdown bàn giao đầy đủ chi tiết. |
+
+---
+
+### Mẹo nhỏ cho bạn:
+
+Nếu dự án của bạn có sử dụng các framework như **FastAPI** hay **Django**, hãy cài thêm plugin tương ứng của `wshobson` để AI có kiến thức chuyên sâu hơn:
+
+```bash
+/plugin install python-development # Đã bao gồm FastAPI-pro và Django-pro
+
+```
+
+**Tiếp theo, bạn có muốn tôi thử "soát lỗi" và "tối ưu" một đoạn code Python cụ thể nào trong dự án của bạn ngay bây giờ không?** (Bạn chỉ cần dán code vào đây hoặc yêu cầu tôi đọc file trong máy).
