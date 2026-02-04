@@ -632,3 +632,213 @@ sudo rm -rf /opt/obs/loki
 ---
 
 Nếu bạn nói thêm **Grafana của bạn đang chạy kiểu nào** (cài apt/service hay container), mình sẽ chỉ đúng 1 cấu hình “đẹp” nhất để Grafana kết nối Loki (tránh lỗi network/localhost), và mình cũng có thể đưa luôn rules firewall tối ưu theo đúng setup SSH của bạn để không bị tự khóa.
+
+Grafana của tôi đang chạy ở đây, 1 container khác.http://192.168.1.88:3001/,  root@DietPi:/opt/obs/loki# curl http://192.168.1.88:3100/ready
+ready
+root@DietPi:/opt/obs/loki# curl http://100.108.146.4:3100/ready
+ready
+root@DietPi:/opt/obs/loki# docker exec -it fr02-grafana sh -lc 'wget -qO- http://192.168.1.88:3100/ready || curl -s http://192.168.1.88:3100/ready'
+ready , giờ cho tôi một script python để bắn log từ máy windows trong mạng lan vào loki rồi vào grafana xem, tôi đã Add Loki datasource trong Grafana
+
+Được — Loki **nhận log qua HTTP endpoint `POST /loki/api/v1/push`** (có thể gửi **JSON** trực tiếp), nên bạn có thể dùng Python trên Windows để “bắn log” vào Loki rồi xem trong Grafana. ([Grafana Labs][1])
+(Lưu ý: Loki **không có cơ chế auth trong API**; an toàn là nhờ bạn giới hạn truy cập bằng LAN/Tailscale/firewall như bạn đang làm. ([Grafana Labs][1]))
+
+Dưới đây là 1 script Python **chạy được trên Windows**, hỗ trợ:
+
+* Gửi 1 dòng test
+* Hoặc chạy liên tục gửi log định kỳ
+* Hoặc tail 1 file log (đọc các dòng mới appended)
+
+---
+
+## 1) Cài thư viện trên Windows
+
+Mở PowerShell / CMD:
+
+```bash
+py -m pip install requests
+```
+
+---
+
+## 2) Lưu script: `loki_push.py`
+
+> Sửa `LOKI_URL` nếu cần (mặc định đúng với bạn: `http://192.168.1.88:3100`)
+
+```python
+import argparse
+import os
+import socket
+import sys
+import time
+from typing import Dict, List, Optional
+
+import requests
+
+
+def now_ns_str() -> str:
+    # Loki expects Unix epoch timestamp in nanoseconds, as a string. :contentReference[oaicite:2]{index=2}
+    return str(time.time_ns())
+
+
+def build_stream(labels: Dict[str, str], lines: List[str]) -> Dict:
+    values = [[now_ns_str(), line] for line in lines]
+    return {"stream": labels, "values": values}
+
+
+def push_to_loki(loki_push_url: str, labels: Dict[str, str], lines: List[str], timeout: int = 5) -> None:
+    payload = {"streams": [build_stream(labels, lines)]}
+    headers = {"Content-Type": "application/json"}
+
+    # Simple retry with backoff
+    backoff = 1.0
+    for attempt in range(1, 6):
+        try:
+            r = requests.post(loki_push_url, json=payload, headers=headers, timeout=timeout)
+            if 200 <= r.status_code < 300:
+                return
+            # Loki returns useful error message in body on 4xx/5xx
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text}")
+        except Exception as e:
+            if attempt == 5:
+                raise
+            time.sleep(backoff)
+            backoff *= 2
+
+
+def tail_file(path: str, sleep_sec: float = 0.25):
+    # Basic "tail -f" for Windows text files
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        f.seek(0, os.SEEK_END)
+        while True:
+            line = f.readline()
+            if not line:
+                time.sleep(sleep_sec)
+                continue
+            yield line.rstrip("\r\n")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Push logs from Windows to Grafana Loki (JSON push API).")
+    parser.add_argument("--loki", default="http://192.168.1.88:3100", help="Loki base URL, e.g. http://192.168.1.88:3100")
+    parser.add_argument("--service", default="win-test", help="service label")
+    parser.add_argument("--env", default="prod", help="env label")
+    parser.add_argument("--site", default="lan", help="site label (lan/sg-vps/etc)")
+    parser.add_argument("--level", default="info", help="level label (info/warn/error)")
+    parser.add_argument("--host", default=socket.gethostname(), help="host label (default: this PC name)")
+    parser.add_argument("--message", help="Send one message and exit")
+    parser.add_argument("--loop", action="store_true", help="Send messages repeatedly (every --interval seconds)")
+    parser.add_argument("--interval", type=float, default=2.0, help="Seconds between messages in --loop mode")
+    parser.add_argument("--file", help="Tail a log file and push new lines to Loki")
+    parser.add_argument("--batch", type=int, default=20, help="Batch size for file/loop mode")
+    args = parser.parse_args()
+
+    loki_push_url = args.loki.rstrip("/") + "/loki/api/v1/push"
+
+    labels = {
+        "job": "windows",
+        "service": args.service,
+        "env": args.env,
+        "site": args.site,
+        "host": args.host,
+        "level": args.level,
+    }
+
+    # Mode 1: single message
+    if args.message:
+        push_to_loki(loki_push_url, labels, [args.message])
+        print("OK: pushed 1 log line")
+        return
+
+    # Mode 2: tail file
+    if args.file:
+        buf: List[str] = []
+        last_flush = time.time()
+        flush_every_sec = 1.0
+
+        for line in tail_file(args.file):
+            buf.append(line)
+            if len(buf) >= args.batch or (time.time() - last_flush) >= flush_every_sec:
+                push_to_loki(loki_push_url, labels, buf)
+                print(f"OK: pushed {len(buf)} lines")
+                buf.clear()
+                last_flush = time.time()
+        return
+
+    # Mode 3: loop generator
+    if args.loop:
+        i = 0
+        buf: List[str] = []
+        while True:
+            i += 1
+            buf.append(f"hello from {args.host} #{i}")
+            if len(buf) >= args.batch:
+                push_to_loki(loki_push_url, labels, buf)
+                print(f"OK: pushed {len(buf)} lines")
+                buf.clear()
+            time.sleep(args.interval)
+
+    parser.print_help()
+    sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+## 3) Chạy test (gửi 1 dòng log)
+
+Trên Windows:
+
+```bash
+py loki_push.py --message "Windows says hello" --service win-demo --env prod --site lan --level info
+```
+
+---
+
+## 4) Xem trong Grafana
+
+Grafana → **Explore** → chọn datasource **Loki** → query:
+
+* Xem tất cả log từ Windows:
+
+```logql
+{job="windows"}
+```
+
+* Theo máy cụ thể:
+
+```logql
+{job="windows", host="TEN_MAY_WINDOWS"}
+```
+
+* Theo service:
+
+```logql
+{job="windows", service="win-demo"}
+```
+
+---
+
+## 5) Tail file log trên Windows (ví dụ)
+
+Ví dụ bạn có log ở `C:\logs\app.log`:
+
+```bash
+py loki_push.py --file "C:\logs\app.log" --service myapp --env prod --site lan --level info
+```
+
+---
+
+### Ghi chú quan trọng
+
+* Loki yêu cầu timestamp theo **Unix epoch nanoseconds dạng string**; script đã làm đúng. ([GitHub][2])
+* “Bắn log trực tiếp” như vậy phù hợp để test/nhỏ lẻ; production thì vẫn nên dùng agent (Promtail/Vector/Fluent Bit) để có retry/buffer tốt hơn. ([Stack Overflow][3])
+
+Nếu bạn nói bạn muốn gửi log kiểu nào (file log ứng dụng, Windows Event Log, hay log của app tự viết), mình có thể chỉnh script cho đúng chuẩn format/label của hệ bạn (service/env/site/level + JSON log).
+
+[1]: https://grafana.com/docs/loki/latest/reference/loki-http-api/?utm_source=chatgpt.com "Loki HTTP API | Grafana Loki documentation"
+[2]: https://github.com/grafana/loki/issues/5226?utm_source=chatgpt.com "Log line pushed via http POST api (/loki/api/v1/push) not ... - GitHub"
+[3]: https://stackoverflow.com/questions/67316535/send-logs-directly-to-loki-without-use-of-agents?utm_source=chatgpt.com "Send logs directly to Loki without use of agents - Stack Overflow"
