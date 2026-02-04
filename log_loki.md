@@ -842,3 +842,148 @@ Nếu bạn nói bạn muốn gửi log kiểu nào (file log ứng dụng, Wind
 [1]: https://grafana.com/docs/loki/latest/reference/loki-http-api/?utm_source=chatgpt.com "Loki HTTP API | Grafana Loki documentation"
 [2]: https://github.com/grafana/loki/issues/5226?utm_source=chatgpt.com "Log line pushed via http POST api (/loki/api/v1/push) not ... - GitHub"
 [3]: https://stackoverflow.com/questions/67316535/send-logs-directly-to-loki-without-use-of-agents?utm_source=chatgpt.com "Send logs directly to Loki without use of agents - Stack Overflow"
+
+Đây là các **label** (nhãn) bạn gắn kèm mỗi dòng log khi gửi vào Loki. Loki dùng label để **lọc nhanh** khi query trong Grafana (LogQL). Mỗi label là một cặp `key=value`.
+
+* **env = prod**
+  *Môi trường chạy* (environment).
+  Ví dụ: `dev`, `staging`, `prod`.
+  Dùng để tách log production ra khỏi log test.
+
+* **host = design**
+  *Tên máy/host phát sinh log* (tên Windows PC hoặc server).
+  Dùng để lọc log theo máy cụ thể: `{host="design"}`.
+
+* **job = windows**
+  *Nhóm nguồn thu thập log* (source/collector job).
+  Ở đây bạn đặt `windows` để biết log này đến từ “nhóm máy Windows” (phân loại cao-level).
+  Thường dùng để tách nhóm như `docker`, `linux`, `nginx`, `windows`, `app-logs`.
+
+* **level = info**
+  *Mức độ log* (severity).
+  Thường: `debug`, `info`, `warn`, `error`.
+  Dùng để lọc nhanh log lỗi: `{level="error"}`.
+
+* **service = win-demo**
+  *Tên dịch vụ/ứng dụng* phát sinh log.
+  Đây là label quan trọng nhất để bạn tách log theo từng app: `{service="win-demo"}`.
+  Với hệ <10 dịch vụ, label `service` cực hữu ích.
+
+* **site = lan**
+  *Vị trí/điểm đặt* (địa điểm/mạng).
+  Ví dụ: `lan`, `home`, `office`, `vps-sg`, `aws-ap-southeast-1`.
+  Dùng để phân biệt log đến từ máy nội bộ hay máy ở xa: `{site="lan"}`.
+
+### Ví dụ truy vấn trong Grafana (Explore)
+
+* Tất cả log Windows trong prod:
+  `{job="windows", env="prod"}`
+* Log của service win-demo ở LAN:
+  `{service="win-demo", site="lan"}`
+* Chỉ log info từ máy design:
+  `{host="design", level="info"}`
+
+**Tip nhỏ “đúng bài”:** Những label như `env/service/site/level/host` là ổn vì số lượng giá trị ít (cardinality thấp). Tránh tạo label kiểu `user_id`, `order_id`, `request_id` vì sẽ làm Loki nặng và query chậm.
+
+
+OK, trạng thái của bạn đang **đúng chuẩn Hybrid** rồi: Loki “ready” trên cả **LAN (192.168.1.88)** và **Tailscale (100.108.146.4)**. 👍
+
+Giờ bước tiếp theo là **cho Grafana container ([http://192.168.1.88:3001](http://192.168.1.88:3001))** kết nối tới Loki một cách **không xung đột + an toàn**.
+
+---
+
+## 1) Kiểm tra Grafana container có gọi được Loki không
+
+Trên Debian host, tìm tên container Grafana:
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+```
+
+Giả sử container tên `grafana` (nếu khác thì thay tên), test từ *bên trong container*:
+
+```bash
+docker exec -it grafana sh -lc 'wget -qO- http://192.168.1.88:3100/ready || curl -s http://192.168.1.88:3100/ready'
+```
+
+Kỳ vọng ra `ready`.
+
+> Nếu container không có `curl/wget`, bạn vẫn có thể test bằng container tạm:
+
+```bash
+docker run --rm curlimages/curl:8.5.0 -s http://192.168.1.88:3100/ready
+```
+
+---
+
+## 2) Add Loki datasource trong Grafana (cách đúng cho container)
+
+Vào Grafana (UI) tại: `http://192.168.1.88:3001`
+
+* **Connections → Data sources → Add data source → Loki**
+* Ở **URL** nhập:
+
+  * **Khuyên dùng:** `http://192.168.1.88:3100` (đường LAN, nhanh, ổn định trong nhà)
+  * (Tuỳ chọn) nếu bạn muốn Grafana “tự dùng được khi bạn chỉ truy cập qua Tailscale”: `http://100.108.146.4:3100`
+
+Bấm **Save & Test** → phải xanh.
+
+> Lưu ý quan trọng: URL datasource là **Grafana server (container) gọi tới**, không phải trình duyệt của bạn gọi tới. Nhưng dùng `192.168.1.88:3100` vẫn OK vì container thường gọi được IP LAN của host.
+
+---
+
+## 3) Test log trong Grafana (Explore)
+
+Vào **Explore → chọn datasource Loki**, thử query:
+
+* Tất cả log theo label (nếu bạn đã ship log từ promtail):
+
+  * `{env="prod"}`
+* Hoặc filter service:
+
+  * `{service="api", env="prod"}`
+* Tìm chuỗi:
+
+  * `{env="prod"} |= "error"`
+
+Nếu chưa có promtail client thì sẽ chưa thấy dữ liệu (bình thường).
+
+---
+
+## 4) Làm “an toàn” cho Grafana container (giống Loki)
+
+Hiện Grafana của bạn đang mở ở `:3001`. Để đúng bài “LAN + Tailscale, không public”, bạn nên **bind port Grafana chỉ vào LAN + Tailscale** (giống Loki).
+
+Nếu Grafana đang chạy bằng docker-compose, trong phần `ports:` nên là kiểu:
+
+```yaml
+ports:
+  - "192.168.1.88:3001:3000"
+  - "100.108.146.4:3001:3000"
+```
+
+Và **không dùng** kiểu `"3001:3000"` (vì nó bind 0.0.0.0 → dễ lộ ra ngoài nếu máy có public interface).
+
+---
+
+## 5) Firewall tối thiểu (khuyến nghị)
+
+Bạn đã làm đúng với Loki; làm tương tự cho Grafana port 3001:
+
+* Cho LAN:
+
+  * allow `192.168.1.0/24 → 3001/tcp`
+* Cho Tailscale:
+
+  * allow inbound trên interface `tailscale0` → 3001/tcp
+
+*(Nếu bạn đang dùng UFW thì thêm rules tương tự như Loki, chỉ đổi port thành 3001.)*
+
+---
+
+## 6) Tiếp theo: Promtail client (LAN dùng 192.168.1.88, remote dùng 100.108.146.4)
+
+* **Client trong LAN:** `http://192.168.1.88:3100/loki/api/v1/push`
+* **Client ở ngoài:** `http://100.108.146.4:3100/loki/api/v1/push`
+
+Nếu bạn nói client của bạn chạy log kiểu **Docker** hay **file/systemd**, mình sẽ đưa đúng 1 bộ `promtail-config.yml` tối ưu (labels: `service/env/site/level`) để bạn copy-paste là thấy log ngay trong Grafana.
