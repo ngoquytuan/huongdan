@@ -987,3 +987,178 @@ Bạn đã làm đúng với Loki; làm tương tự cho Grafana port 3001:
 * **Client ở ngoài:** `http://100.108.146.4:3100/loki/api/v1/push`
 
 Nếu bạn nói client của bạn chạy log kiểu **Docker** hay **file/systemd**, mình sẽ đưa đúng 1 bộ `promtail-config.yml` tối ưu (labels: `service/env/site/level`) để bạn copy-paste là thấy log ngay trong Grafana.
+
+Log của bạn đang ở dạng “human-readable”:
+
+`2026-01-28 18:37:23,085 [INFO] APP START - ...`
+
+Để “hay và chuyên nghiệp” khi đẩy về Loki, có 2 hướng (mình khuyên theo thứ tự):
+
+## Hướng 1 (khuyến nghị production): **Ghi log ra file + dùng agent (Grafana Alloy) ship lên Loki**
+
+Lý do: agent có **buffer/retry**, chịu được mất mạng, batch tối ưu, ít rủi ro “bắn rơi log”. Grafana cũng **khuyến nghị Alloy để gửi log vào Loki**. ([Grafana Labs][1])
+
+**Bạn làm như sau (Windows trong LAN):**
+
+1. App tiếp tục ghi log ra file (vd `C:\logs\app.log`) với format hiện tại.
+2. Cài **Grafana Alloy** trên Windows (collector mới; Grafana Agent cũ đã EOL và được hướng migrate sang Alloy). ([Grafana Labs][2])
+3. Cấu hình Alloy “tail file” và push về:
+
+* LAN: `http://192.168.1.88:3100/loki/api/v1/push`
+
+**Điểm “pro”**: bạn giữ label ít và ổn định: `service, env, site, host, level` (giống bạn đang làm), còn nội dung chi tiết nằm trong dòng log. Tránh label kiểu `request_id/user_id` vì gây “high-cardinality” làm Loki nặng/chậm. ([Stack Overflow][3])
+
+> Nếu bạn muốn, mình sẽ đưa đúng file config Alloy cho Windows + cách cài service (vì đoạn này dài hơn một chút và bạn sẽ copy-paste chạy luôn).
+
+---
+
+## Hướng 2 (nhanh gọn, hợp với app Python của bạn): **Tạo “Loki handler” trong Python logging**
+
+Cách này “chuyên nghiệp” khi bạn:
+
+* Gửi log **theo batch**
+* Parse đúng `timestamp` từ dòng log (không dùng thời gian gửi)
+* Map `[INFO]` → label `level="info"`
+* Gắn label: `service=... env=... site=... host=... job=windows`
+
+Loki nhận log qua HTTP Push API `/loki/api/v1/push` và timestamp là **epoch nanoseconds**. ([Grafana Labs][4])
+
+### Script Python (Windows): tail file log hiện tại và đẩy lên Loki (parse timestamp)
+
+Lưu thành `tail_to_loki.py`:
+
+```python
+import argparse
+import os
+import re
+import socket
+import time
+from datetime import datetime, timezone, timedelta
+from typing import List, Dict
+
+import requests
+
+LINE_RE = re.compile(
+    r'^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) \[(?P<level>[A-Z]+)\] (?P<msg>.*)$'
+)
+
+LEVEL_MAP = {
+    "DEBUG": "debug",
+    "INFO": "info",
+    "WARNING": "warn",
+    "WARN": "warn",
+    "ERROR": "error",
+    "CRITICAL": "error",
+}
+
+def dt_to_ns(dt: datetime) -> str:
+    # Loki expects Unix epoch in nanoseconds as string
+    return str(int(dt.timestamp() * 1_000_000_000))
+
+def push(loki_url: str, labels: Dict[str, str], batch: List[List[str]], timeout=5):
+    payload = {"streams": [{"stream": labels, "values": batch}]}
+    r = requests.post(loki_url, json=payload, timeout=timeout)
+    if not (200 <= r.status_code < 300):
+        raise RuntimeError(f"Push failed: HTTP {r.status_code} {r.text}")
+
+def tail_f(path: str):
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        f.seek(0, os.SEEK_END)
+        while True:
+            line = f.readline()
+            if not line:
+                time.sleep(0.25)
+                continue
+            yield line.rstrip("\r\n")
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--file", required=True, help="Path to log file, e.g. C:\\logs\\app.log")
+    p.add_argument("--loki", default="http://192.168.1.88:3100/loki/api/v1/push")
+    p.add_argument("--service", default="win-demo")
+    p.add_argument("--env", default="prod")
+    p.add_argument("--site", default="lan")
+    p.add_argument("--job", default="windows")
+    p.add_argument("--host", default=socket.gethostname().lower())
+    p.add_argument("--tz", default="+07:00", help="Timezone offset of log timestamps, e.g. +07:00")
+    p.add_argument("--batch", type=int, default=50, help="Max lines per push")
+    p.add_argument("--flush_sec", type=float, default=1.0, help="Flush interval seconds")
+    args = p.parse_args()
+
+    # Parse timezone offset like +07:00
+    sign = 1 if args.tz.startswith("+") else -1
+    hh, mm = args.tz[1:].split(":")
+    tz = timezone(sign * timedelta(hours=int(hh), minutes=int(mm)))
+
+    base_labels = {
+        "job": args.job,
+        "service": args.service,
+        "env": args.env,
+        "site": args.site,
+        "host": args.host,
+    }
+
+    buf: List[List[str]] = []
+    last_flush = time.time()
+
+    for line in tail_f(args.file):
+        m = LINE_RE.match(line)
+        if m:
+            ts = datetime.strptime(m.group("ts"), "%Y-%m-%d %H:%M:%S,%f").replace(tzinfo=tz)
+            level = LEVEL_MAP.get(m.group("level"), "info")
+            msg = m.group("msg")
+        else:
+            # Fallback: if line doesn't match, use "now"
+            ts = datetime.now(tz=timezone.utc)
+            level = "info"
+            msg = line
+
+        labels = dict(base_labels)
+        labels["level"] = level
+
+        buf.append([dt_to_ns(ts.astimezone(timezone.utc)), msg])
+
+        if len(buf) >= args.batch or (time.time() - last_flush) >= args.flush_sec:
+            try:
+                push(args.loki, labels, buf)
+                buf.clear()
+                last_flush = time.time()
+            except Exception as e:
+                # simple backoff and keep buffer
+                print(f"Push error: {e}")
+                time.sleep(2)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Chạy trên Windows
+
+```bash
+py -m pip install requests
+py tail_to_loki.py --file "C:\Users\Admin\Documents\tesst\...\app.log" --service fr-app --env prod --site lan --tz +07:00
+```
+
+### Xem trong Grafana (Explore → Loki)
+
+```logql
+{service="fr-app", env="prod", site="lan"}
+```
+
+---
+
+## “Pro upgrade” cho log format của bạn (nếu bạn chỉnh được app)
+
+Hiện bạn đang log “text”. Nếu nâng lên **JSON structured logging** (vẫn gửi vào Loki), bạn sẽ:
+
+* lọc/sort tốt hơn
+* dễ link trace_id/request_id (để trong JSON body, **không làm label**)
+
+---
+
+Nếu bạn nói rõ app của bạn là **Python** (logging module) hay app khác, và log đang **ghi ra file nào**, mình sẽ đề xuất dứt khoát 1 phương án tối ưu (Alloy hay logging handler) + config đúng “chuẩn labels” cho hệ của bạn (service/env/site/host/level) để về sau mở rộng lên 10 dịch vụ vẫn mượt.
+
+[1]: https://grafana.com/docs/loki/latest/send-data/alloy/?utm_source=chatgpt.com "Ingesting logs to Loki using Alloy | Grafana Loki documentation"
+[2]: https://grafana.com/docs/agent/latest/?utm_source=chatgpt.com "Grafana Agent | Grafana Agent documentation"
+[3]: https://stackoverflow.com/questions/67316535/send-logs-directly-to-loki-without-use-of-agents?utm_source=chatgpt.com "Send logs directly to Loki without use of agents - Stack Overflow"
+[4]: https://grafana.com/docs/loki/latest/reference/loki-http-api/?utm_source=chatgpt.com "Loki HTTP API | Grafana Loki documentation"
