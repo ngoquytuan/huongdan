@@ -1,3 +1,236 @@
+omen@omen-MS-7918:/opt/fr03$ cat /etc/resolv.conf
+# This is /run/systemd/resolve/stub-resolv.conf managed by man:systemd-resolved(8).
+# Do not edit.
+#
+# This file might be symlinked as /etc/resolv.conf. If you're looking at
+# /etc/resolv.conf and seeing this text, you have followed the symlink.
+#
+# This is a dynamic resolv.conf file for connecting local clients to the
+# internal DNS stub resolver of systemd-resolved. This file lists all
+# configured search domains.
+#
+# Run "resolvectl status" to see details about the uplink DNS servers
+# currently in use.
+#
+# Third party programs should typically not access this file directly, but only
+# through the symlink at /etc/resolv.conf. To manage man:resolv.conf(5) in a
+# different way, replace this symlink by a static file or a different symlink.
+#
+# See man:systemd-resolved.service(8) for details about the supported modes of
+# operation for /etc/resolv.conf.
+
+nameserver 127.0.0.53
+options edns0 trust-ad
+search tail3d127.ts.net
+omen@omen-MS-7918:/opt/fr03$ sudo nano /etc/resolv.conf
+[sudo] password for omen:
+omen@omen-MS-7918:/opt/fr03$ sudo nano /etc/systemd/resolved.conf
+omen@omen-MS-7918:/opt/fr03$ sudo systemctl restart systemd-resolved
+omen@omen-MS-7918:/opt/fr03$ ping google.com
+omen@omen-MS-7918:/opt/fr03$ cat /etc/os-release
+NAME="Linux Mint"
+VERSION="22.3 (Zena)"
+ID=linuxmint
+ID_LIKE="ubuntu debian"
+PRETTY_NAME="Linux Mint 22.3"
+VERSION_ID="22.3"
+HOME_URL="https://www.linuxmint.com/"
+SUPPORT_URL="https://forums.linuxmint.com/"
+BUG_REPORT_URL="http://linuxmint-troubleshooting-guide.readthedocs.io/en/latest/"
+PRIVACY_POLICY_URL="https://www.linuxmint.com/"
+VERSION_CODENAME=zena
+UBUNTU_CODENAME=noble
+omen@omen-MS-7918:/opt/fr03$ sudo rm /etc/apt/sources.list.d/docker.list
+
+À, té ra bạn đang dùng **Linux Mint 22.3 (Zena)**! Linux Mint 22 dựa trên nền tảng **Ubuntu 24.04 (Noble)**, nhưng vì biến `$VERSION_CODENAME` của bạn trả về `zena` thay vì `noble`, nên máy chủ Docker không tìm thấy gói phần mềm phù hợp.
+
+Dưới đây là chuỗi lệnh chuẩn xác nhất để "ép" hệ thống lấy đúng gói Docker dành cho nền tảng Ubuntu mà Mint đang đứng trên đó:
+
+---
+
+### 1. Làm sạch cấu hình cũ
+
+Để tránh xung đột, hãy xóa file lỗi trước:
+
+```bash
+sudo rm /etc/apt/sources.list.d/docker.list
+
+```
+
+### 2. Thiết lập Repository chuẩn (Dùng Noble)
+
+Thay vì dùng biến tự động, chúng ta sẽ chỉ định thẳng tên mã `noble`:
+
+```bash
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  noble stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+```
+
+### 3. Cập nhật và Cài đặt
+
+Bây giờ lệnh `update` sẽ tìm thấy các gói Docker:
+
+```bash
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+```
+
+---
+
+### 4. Cấu hình để dùng Docker không cần `sudo`
+
+Trên Linux Mint, việc này giúp bạn thao tác tiện lợi hơn nhiều:
+
+```bash
+# Tạo group docker (thường đã có sẵn)
+sudo groupadd docker
+
+# Thêm user hiện tại của bạn vào group
+sudo usermod -aG docker $USER
+
+```
+
+> **Lưu ý:** Sau lệnh này, bạn cần **Khởi động lại máy** (hoặc Log out rồi Log in) để lệnh `docker` có hiệu lực mà không cần gõ `sudo`.
+
+---
+
+### 5. Kiểm tra kết quả
+
+Hãy chạy thử lệnh này để chắc chắn mọi thứ đã ổn:
+
+```bash
+docker --version
+sudo docker run hello-world
+
+```
+
+**Một chút kinh nghiệm với Linux Mint:** Vì bạn đang có sẵn Driver NVIDIA (tôi thấy repo CUDA trong log trước của bạn), nếu bạn định dùng Docker để chạy các tác vụ liên quan đến AI hoặc đồ họa, bạn sẽ cần cài thêm **NVIDIA Container Toolkit**.
+
+Bạn đã cài xong bước trên chưa? Nếu rồi, tôi sẽ gửi tiếp lệnh cài Toolkit để Docker "ăn" được card đồ họa của bạn!
+Tuyệt vời, vì bạn đang dùng **Linux Mint 22 (nền Ubuntu 24.04 Noble)** và đã có sẵn Driver NVIDIA, việc cài đặt **NVIDIA Container Toolkit** sẽ giúp các container Docker "nhìn thấy" và sử dụng được sức mạnh của GPU (rất quan trọng cho AI, Stable Diffusion, hoặc Render).
+
+Hãy thực hiện theo các bước sau:
+
+---
+
+### 1. Thêm Repository của NVIDIA
+
+Bạn cần thêm kho lưu trữ chính thức của NVIDIA vào hệ thống:
+
+```bash
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+  && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+```
+
+### 2. Cài đặt Toolkit
+
+Cập nhật lại danh sách gói và tiến hành cài đặt:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+```
+
+### 3. Cấu hình Docker để nhận diện GPU
+
+Lệnh này sẽ tự động sửa file cấu hình của Docker (`daemon.json`) để nó biết cách sử dụng driver NVIDIA:
+
+```bash
+sudo nvidia-ctk runtime configure --launcher=docker
+
+```
+
+### 4. Khởi động lại Docker
+
+Để các thay đổi có hiệu lực, bạn phải khởi động lại dịch vụ Docker:
+
+```bash
+sudo systemctl restart docker
+
+```
+
+---
+
+### 5. Kiểm tra xem Docker đã "thấy" Card đồ họa chưa
+
+Đây là bước quan trọng nhất. Hãy chạy thử một container nhỏ của NVIDIA để kiểm tra thông số GPU:
+
+```bash
+sudo docker run --rm --gpus all nvidia/cuda:12.0.1-base-ubuntu22.04 nvidia-smi
+
+```
+
+* **Nếu thành công:** Bạn sẽ thấy bảng thông số kỹ thuật của card đồ họa (tên card, lượng VRAM đang dùng...) hiện ra trong terminal giống hệt như khi bạn gõ `nvidia-smi` ở máy thật.
+* **Nếu lỗi:** Có thể do phiên bản CUDA của container không tương thích với Driver máy thật, lúc đó hãy báo tôi để điều chỉnh tag image.
+
+---
+
+### Một vài lưu ý nhỏ:
+
+* **Lệnh chạy sau này:** Khi muốn một container sử dụng GPU, bạn luôn phải thêm flag `--gpus all` vào lệnh `docker run`.
+* **Với Docker Compose:** Bạn sẽ cần thêm cấu hình `deploy: resources: reservations: devices:` vào file `.yml`.
+
+Bạn có dự định chạy ứng dụng cụ thể nào trên Docker (ví dụ: Ollama, Stable Diffusion, hay Web server) không? Tôi có thể giúp bạn soạn file `docker-compose.yml` mẫu!
+
+Lỗi này xảy ra vì phiên bản `nvidia-ctk` mới nhất đã thay đổi cấu trúc lệnh một chút (bỏ dấu gạch ngang ở `launcher` hoặc đổi thành tham số mặc định).
+
+Bạn hãy thử lại với lệnh chuẩn dưới đây, nó sẽ tự động nhận diện runtime cho Docker:
+
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker
+
+```
+
+Hoặc đơn giản hơn (vì Docker thường là mặc định):
+
+```bash
+sudo nvidia-ctk runtime configure
+
+```
+
+### Sau đó, bạn đừng quên khởi động lại Docker:
+
+```bash
+sudo systemctl restart docker
+
+```
+
+---
+
+### Cách kiểm tra "chốt hạ"
+
+Sau khi khởi động lại, bạn hãy chạy lệnh này để xác nhận Docker đã thực sự hỗ trợ GPU:
+
+```bash
+docker info | grep -i nvidia
+
+```
+
+Nếu kết quả hiện ra có dòng `Runtimes: ... nvidia ...` là bạn đã cấu hình thành công!
+
+---
+
+### Bước cuối cùng: Test thực tế
+
+Hãy thử chạy lệnh "thần thánh" này để xem Docker có gọi được GPU không:
+
+```bash
+sudo docker run --rm --gpus all nvidia/cuda:12.0.1-base-ubuntu22.04 nvidia-smi
+
+```
+
+Nếu bảng thông số GPU hiện lên, thì xin chúc mừng, hệ thống của bạn đã sẵn sàng cho mọi tác vụ AI nặng nhất rồi đó!
+
+Bạn định cài **Ollama** hay **Stable Diffusion** lên Docker này không? Tôi có thể hỗ trợ bạn viết file cấu hình để chạy chúng chỉ bằng một lệnh duy nhất.
+
+
 PS C:\\Users\\Admin> docker volume create portainer_data
 portainer_data
 PS C:\\Users\\Admin> docker run -d -p 8009:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
@@ -37,7 +270,7 @@ Lệnh này chạy đúng
 ```bash
 sudo docker run -d -p 9443:9443 -p 9006:9000 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
 ```
-
+https://192.168.22.167:9443/#!/3/docker/containers
 docker run -d -p 9443:9443 -p 9006:9000 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts
 Chuẩn rồi Tuấn 🚀, Docker Desktop trên Windows hay gặp tình trạng chiếm nhiều dung lượng vì:
 
